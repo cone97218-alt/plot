@@ -1,0 +1,88 @@
+<h4 style="margin-top:0; border-bottom: 1px solid var(--SmartThemeBorderColor); padding-bottom: 6px; color: var(--SmartThemeEmColor);">API 连接管理</h4>
+
+<div class="plot-setting-group" style="margin-bottom:20px;">
+    <label class="plot-label">默认全局连接</label>
+    <div style="display:flex; gap:8px; align-items:center;">
+        <select id="plot-default-connection" class="plot-select" style="flex:1;">
+            <!-- Injected dynamically by JS -->
+        </select>
+        <button id="plot-default-conn-test-btn" class="menu_button plot-btn plot-no-shrink" style="padding: 6px 12px; font-size: 0.9em;" title="快速测试当前选中的默认连接">
+            <i class="fa-solid fa-plug"></i> 测试
+        </button>
+    </div>
+</div>
+
+<div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:10px;">
+    <label class="plot-label">自定义连接列表</label>
+    <button id="plot-add-conn-btn" class="menu_button plot-btn plot-no-shrink" style="padding:4px 10px; font-size:0.85em;">
+        <i class="fa-solid fa-plus"></i> 新建连接
+    </button>
+</div>
+
+<div id="plot-connections-list" style="border:1px solid var(--SmartThemeBorderColor); border-radius:4px; margin-bottom:20px;">
+    <!-- Injected dynamically by JS -->
+</div>
+
+<!-- Inline connection add/edit form (hidden by default) -->
+<div id="plot-conn-form-container" style="display:none; border:1px solid var(--SmartThemeBorderColor); border-radius:4px; padding:12px; margin-top:15px;">
+    <h5 id="plot-conn-form-title" style="margin-top:0; margin-bottom:10px; color:var(--SmartThemeEmColor);">新建连接</h5>
+    <input type="hidden" id="plot-conn-id" value="">
+    
+    <div class="plot-setting-group" style="margin-bottom:10px;">
+        <label class="plot-label">连接名称</label>
+        <input type="text" id="plot-conn-name" class="plot-input" placeholder="例如: local-lm" style="width:100%;">
+    </div>
+
+    <div class="plot-setting-group" style="margin-bottom:10px;">
+        <label class="plot-label">连接类型</label>
+        <select id="plot-conn-type" class="plot-select" style="width:100%;">
+            <option value="openai-compat">OpenAI 兼容</option>
+            <option value="openai">OpenAI 官方</option>
+            <option value="deepseek">DeepSeek</option>
+        </select>
+    </div>
+
+    <div class="plot-setting-group" style="margin-bottom:10px;">
+        <label class="plot-label">API 端点 (Endpoint URL)</label>
+        <input type="text" id="plot-conn-endpoint" class="plot-input" placeholder="https://api.openai.com/v1/chat/completions" style="width:100%;">
+    </div>
+
+    <div class="plot-setting-group" style="margin-bottom:10px;">
+        <label class="plot-label">API Key</label>
+        <input type="password" id="plot-conn-key" class="plot-input" placeholder="可空 (如果本地不需要 Key)" style="width:100%;">
+    </div>
+
+    <div class="plot-setting-group" style="margin-bottom:10px;">
+        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:6px;">
+            <label class="plot-label">模型名称 (Model)</label>
+            <button id="plot-conn-pull-models" class="menu_button plot-btn" style="padding:2px 8px; font-size:0.8em;" title="拉取可用模型列表">
+                <i class="fa-solid fa-arrows-rotate"></i> 拉取模型
+            </button>
+        </div>
+        <div style="display:flex; gap:8px;">
+            <input type="text" id="plot-conn-model" class="plot-input" placeholder="gpt-4o-mini 或 deepseek-chat" style="flex:1;">
+            <select id="plot-conn-model-select" class="plot-select" style="display:none; max-width:120px;"></select>
+        </div>
+    </div>
+
+    <div style="display:flex; gap:10px; margin-bottom:15px;">
+        <div class="plot-setting-group" style="flex:1;">
+            <label class="plot-label">温度 (Temp)</label>
+            <input type="number" id="plot-conn-temp" class="plot-input" step="0.1" min="0" max="2" value="0.7" style="width:100%;">
+        </div>
+        <div class="plot-setting-group" style="flex:1;">
+            <label class="plot-label">Max Tokens</label>
+            <input type="number" id="plot-conn-tokens" class="plot-input" step="100" min="1" value="1000" style="width:100%;">
+        </div>
+    </div>
+
+    <div style="display:flex; gap:10px; justify-content:space-between; align-items:center;">
+        <button id="plot-conn-test" class="menu_button plot-btn" style="padding:4px 10px; font-size:0.85em; border-color:var(--SmartThemeEmColor); color:var(--SmartThemeEmColor);">
+            <i class="fa-solid fa-plug"></i> 测试连接
+        </button>
+        <div style="display:flex; gap:10px;">
+            <button id="plot-conn-cancel" class="menu_button plot-btn" style="padding:4px 10px; font-size:0.85em;">取消</button>
+            <button id="plot-conn-save" class="menu_button plot-btn" style="padding:4px 10px; font-size:0.85em; background-color:var(--SmartThemeEmColor); color:rgba(var(--SmartThemeBlurTintColor-rgb), 1); border-color:var(--SmartThemeEmColor); font-weight:bold;">保存</button>
+        </div>
+    </div>
+</div>

@@ -1,0 +1,53 @@
+<div class="plot-accordion">
+    <!-- Panel Display Section -->
+    <div class="plot-accordion-section">
+        <div class="plot-accordion-header" id="plot-header-display">
+            <span class="plot-accordion-title">面板显示</span>
+            <i class="fa-solid fa-chevron-down plot-accordion-icon"></i>
+        </div>
+        <div class="plot-accordion-body" id="plot-body-display" style="display:none; padding: 12px 5px;">
+            <div class="plot-setting-group" style="margin-bottom:15px;">
+                <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom: 6px;">
+                    <label class="plot-label plot-no-shrink">弹窗位置</label>
+                    <button id="plot-preview-panel" class="menu_button plot-btn plot-no-shrink" style="padding: 2px 8px; font-size: 0.85em; align-self: center;" title="预览面板">
+                        <i class="fa-solid fa-eye"></i>
+                    </button>
+                </div>
+                <select id="plot-panel-position" class="plot-select" style="width:100%;">
+                    <option value="normal">居中弹窗</option>
+                    <option value="top">上方滑出</option>
+                    <option value="bottom">下方滑出</option>
+                    <option value="left">左侧滑出</option>
+                    <option value="right">右侧滑出</option>
+                </select>
+            </div>
+
+            <div class="plot-setting-group">
+                <label class="plot-label plot-no-shrink">面板尺寸比例</label>
+                <input
+                    id="plot-panel-size"
+                    type="text"
+                    class="plot-input"
+                    placeholder="如 80% 或 400px"
+                    style="width:100%;"
+                />
+                <div style="font-size:0.78em; margin-top:4px; color:var(--SmartThemeEmColor);">
+                    居中控制宽/高，左右控制宽，上下控制高。
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Module Toggles Section -->
+    <div class="plot-accordion-section">
+        <div class="plot-accordion-header" id="plot-header-modules">
+            <span class="plot-accordion-title">模块开关</span>
+            <i class="fa-solid fa-chevron-down plot-accordion-icon"></i>
+        </div>
+        <div class="plot-accordion-body" id="plot-body-modules" style="display:none; padding: 12px 5px;">
+            <div class="plot-toggle-list" id="plot-toggle-list">
+                <!-- Injected dynamically by JS -->
+            </div>
+        </div>
+    </div>
+</div>

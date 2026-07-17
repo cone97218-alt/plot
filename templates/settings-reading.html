@@ -1,0 +1,142 @@
+<h4 style="margin-top:0; border-bottom: 1px solid var(--SmartThemeBorderColor); padding-bottom: 6px; color: var(--SmartThemeEmColor);">内容读取策略</h4>
+<p style="font-size:0.82em; color:var(--SmartThemeBodyColor); margin-bottom:15px;">
+    配置分析 AI 调用时，该插件如何从 SillyTavern 当前会话中读取上下文信息。
+</p>
+
+<div class="plot-accordion" style="display:flex; flex-direction:column; gap:10px;">
+    
+    <!-- Section 1: 对话 -->
+    <div class="plot-accordion-section" style="border:1px solid var(--SmartThemeBorderColor); border-radius:6px; overflow:hidden;">
+        <div class="plot-accordion-header" id="plot-read-hdr-chat" style="background-color:var(--SmartThemeChatTintColor);">
+            <span class="plot-accordion-title">对话历史</span>
+            <i class="fa-solid fa-chevron-down plot-accordion-icon"></i>
+        </div>
+        <div class="plot-accordion-body" id="plot-read-body-chat" style="display:none; padding:12px;">
+            <div class="plot-setting-group" style="margin-bottom:15px;">
+                <label class="plot-label">历史对话读取深度</label>
+                <input type="number" id="plot-reading-limit" class="plot-input" min="0" style="width:100%;">
+                <div style="font-size:0.75em; color:var(--SmartThemeEmColor); margin-top:2px;">
+                    最近的对话消息条数。设置为 0 时拉取全部。
+                </div>
+            </div>
+
+            <!-- 二级折叠条: 正则裁剪 -->
+            <div class="plot-accordion-section" style="border:1px solid var(--SmartThemeBorderColor); border-radius:4px; overflow:hidden; margin-top:10px;">
+                <div class="plot-accordion-header" id="plot-read-hdr-regex" style="padding:8px 12px; background:rgba(0,0,0,0.05);">
+                    <span class="plot-accordion-title" style="font-size:0.85em;">正则裁剪规则</span>
+                    <i class="fa-solid fa-chevron-down plot-accordion-icon" style="font-size:0.85em;"></i>
+                </div>
+                <div class="plot-accordion-body" id="plot-read-body-regex" style="display:none; padding:10px; background:transparent;">
+                    <div style="display:flex; justify-content:flex-end; margin-bottom:8px;">
+                        <button id="plot-regex-add-btn" class="menu_button plot-btn" style="padding:2px 8px; font-size:0.8em;">
+                            <i class="fa-solid fa-plus"></i> 新建规则
+                        </button>
+                    </div>
+                    <div id="plot-regex-rules-list" style="display:flex; flex-direction:column; gap:8px;">
+                        <!-- Reg rules list -->
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Section 2: 设定 -->
+    <div class="plot-accordion-section" style="border:1px solid var(--SmartThemeBorderColor); border-radius:6px; overflow:hidden;">
+        <div class="plot-accordion-header" id="plot-read-hdr-persona" style="background-color:var(--SmartThemeChatTintColor);">
+            <span class="plot-accordion-title">设定描述</span>
+            <i class="fa-solid fa-chevron-down plot-accordion-icon"></i>
+        </div>
+        <div class="plot-accordion-body" id="plot-read-body-persona" style="display:none; padding:12px;">
+            <div style="display:flex; flex-direction:column; gap:8px;">
+                <label style="display:flex; align-items:center; gap:8px; font-size:0.9em; cursor:pointer;">
+                    <input type="checkbox" id="plot-reading-char-desc">
+                    注入角色卡设定描述
+                </label>
+                <label style="display:flex; align-items:center; gap:8px; font-size:0.9em; cursor:pointer;">
+                    <input type="checkbox" id="plot-reading-user-desc">
+                    注入当前用户描述
+                </label>
+            </div>
+        </div>
+    </div>
+
+    <!-- Section 3: 世界书 -->
+    <div class="plot-accordion-section" style="border:1px solid var(--SmartThemeBorderColor); border-radius:6px; overflow:hidden;">
+        <div class="plot-accordion-header" id="plot-read-hdr-wi" style="background-color:var(--SmartThemeChatTintColor);">
+            <span class="plot-accordion-title">世界书设定</span>
+            <i class="fa-solid fa-chevron-down plot-accordion-icon"></i>
+        </div>
+        <div class="plot-accordion-body" id="plot-read-body-wi" style="display:none; padding:12px; flex-direction:column; gap:10px;">
+            <!-- 角色书 -->
+            <div>
+                <label style="display:flex; align-items:center; gap:8px; font-size:0.9em; cursor:pointer;">
+                    <input type="checkbox" id="plot-reading-wi-char">
+                    注入角色卡绑定的世界书
+                </label>
+                <div id="plot-wi-char-container" style="margin-left:15px; margin-top:4px;"></div>
+            </div>
+
+            <!-- 全局书 -->
+            <div style="border-top:1px solid rgba(255,255,255,0.05); padding-top:8px;">
+                <label style="display:flex; align-items:center; gap:8px; font-size:0.9em; cursor:pointer;">
+                    <input type="checkbox" id="plot-reading-wi-global">
+                    注入全局启用的世界书
+                </label>
+                <div id="plot-wi-global-container" style="margin-left:15px; margin-top:4px;"></div>
+            </div>
+
+            <!-- 聊天独立书 -->
+            <div style="border-top:1px solid rgba(255,255,255,0.05); padding-top:8px;">
+                <label style="display:flex; align-items:center; gap:8px; font-size:0.9em; cursor:pointer;">
+                    <input type="checkbox" id="plot-reading-wi-chat">
+                    注入当前聊天绑定的独立世界书
+                </label>
+                <div id="plot-wi-chat-container" style="margin-left:15px; margin-top:4px;"></div>
+            </div>
+
+            <!-- 独立自定义世界书 -->
+            <div style="border-top:1px solid rgba(255,255,255,0.05); padding-top:8px;">
+                <label class="plot-label" style="font-size:0.85em; font-weight:bold; margin-bottom:4px; display:block;">独立启用世界书</label>
+                <select id="plot-reading-wi-custom-select" class="plot-select" style="width:100%; margin-bottom:4px;">
+                    <!-- Injected dynamically by JS -->
+                </select>
+                <div id="plot-wi-custom-container" style="margin-left:15px; margin-top:4px;"></div>
+            </div>
+
+            <!-- 全局过滤设置 -->
+            <div class="plot-accordion-section" style="border:1px solid var(--SmartThemeBorderColor); border-radius:4px; overflow:hidden; margin-top:10px;">
+                <div class="plot-accordion-header" id="plot-read-hdr-wi-filter" style="padding:6px 12px; background:rgba(0,0,0,0.05);">
+                    <span class="plot-accordion-title" style="font-size:0.82em;">全局过滤设置</span>
+                    <i class="fa-solid fa-chevron-down plot-accordion-icon" style="font-size:0.82em;"></i>
+                </div>
+                <div class="plot-accordion-body" id="plot-read-body-wi-filter" style="display:none; padding:10px; background:transparent;">
+                    <div style="margin-bottom:8px;">
+                        <label class="plot-label" style="font-size:0.85em; font-weight:normal; margin-bottom:4px; display:block;">排除的世界书条目名称/前缀</label>
+                        <input type="text" id="plot-reading-wi-exclude" class="plot-input" placeholder="例如: system_, hidden_" style="width:100%;">
+                    </div>
+                    <div>
+                        <label class="plot-label" style="font-size:0.85em; font-weight:normal; margin-bottom:4px; display:block;">只注入匹配名称/前缀的条目</label>
+                        <input type="text" id="plot-reading-wi-include" class="plot-input" placeholder="例如: plot_, state_" style="width:100%;">
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Section 4: 其他 -->
+    <div class="plot-accordion-section" style="border:1px solid var(--SmartThemeBorderColor); border-radius:6px; overflow:hidden;">
+        <div class="plot-accordion-header" id="plot-read-hdr-other" style="background-color:var(--SmartThemeChatTintColor);">
+            <span class="plot-accordion-title">其他总结</span>
+            <i class="fa-solid fa-chevron-down plot-accordion-icon"></i>
+        </div>
+        <div class="plot-accordion-body" id="plot-read-body-other" style="display:none; padding:12px;">
+            <div class="plot-setting-group">
+                <label class="plot-label">第三方总结数据获取 JS 表达式</label>
+                <input type="text" id="plot-reading-summary-expr" class="plot-input" placeholder="例如: extension_settings.summarize?.summary" style="width:100%; font-family:monospace; font-size:0.9em;">
+                <div style="font-size:0.75em; color:var(--SmartThemeEmColor); margin-top:4px;">
+                    高级功能：指定用于获取对话摘要的 JS 表达式。提取的数据将赋值给模板中的 {{summary}} 占位符。
+                </div>
+            </div>
+        </div>
+    </div>
+</div>

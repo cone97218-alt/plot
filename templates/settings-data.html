@@ -1,0 +1,18 @@
+<h4 style="margin-top:0; border-bottom: 1px solid var(--SmartThemeBorderColor); padding-bottom: 6px; color: var(--SmartThemeEmColor);">数据管理</h4>
+<p style="font-size:0.85em; color:var(--SmartThemeBodyColor); margin-bottom:15px;">
+    导出或导入当前聊天会话下的剧情推动模块数据。
+</p>
+<div style="display:flex; gap:10px; flex-wrap:wrap; margin-bottom:15px;">
+    <button id="plot-export-btn" class="menu_button plot-btn plot-no-shrink">
+        <i class="fa-solid fa-file-export"></i> 导出剧情数据
+    </button>
+    <button id="plot-import-btn" class="menu_button plot-btn plot-no-shrink">
+        <i class="fa-solid fa-file-import"></i> 导入剧情数据
+    </button>
+    <button id="plot-reset-all-btn" class="menu_button plot-btn plot-no-shrink" style="background-color: var(--smart-red, #d9534f); color: white;" title="清除当前插件的所有配置与角色历史数据，恢复默认设置">
+        <i class="fa-solid fa-trash-can"></i> 重置一切
+    </button>
+</div>
+<div style="font-size:0.78em; color:var(--SmartThemeEmColor);">
+    导出格式为标准 JSON 格式，包含角色变量、任务目标和故事线。
+</div>

@@ -1,0 +1,38 @@
+<h4 style="margin:0 0 8px 0;color:var(--SmartThemeEmColor);border-bottom:1px solid var(--SmartThemeBorderColor);padding-bottom:6px;font-size:1em;display:flex;justify-content:space-between;align-items:center;">
+    <span>提示词工作台</span>
+    <button id="plot-prompts-save-btn" class="menu_button plot-btn" style="padding:2px 8px;font-size:0.8em;" title="手动保存当前所有修改"><i class="fa-solid fa-floppy-disk"></i> 保存</button>
+</h4>
+
+<!-- Module Selector Dropdown -->
+<div style="display:flex;align-items:center;gap:8px;margin-bottom:10px;border-bottom:1px solid var(--SmartThemeBorderColor);padding-bottom:10px;">
+    <span style="font-size:0.85em;font-weight:bold;color:var(--SmartThemeEmColor);"><i class="fa-solid fa-layer-group"></i> 选择模块：</span>
+    <select id="pt-module-select" class="plot-select" style="flex:1;height:28px;font-size:0.85em;padding:0 6px;">
+        <!-- Injected dynamically by JS -->
+    </select>
+</div>
+
+<p id="pt-desc" style="font-size:0.79em;color:var(--SmartThemeBodyColor);margin:0 0 8px 0;"></p>
+
+<!-- Preset bar -->
+<div id="pt-preset-bar" style="display:flex;align-items:center;gap:6px;background:rgba(0,0,0,0.1);padding:4px 8px;border-radius:6px;border:1px solid var(--SmartThemeBorderColor);margin-bottom:10px;"></div>
+
+<!-- Module Config bar -->
+<div id="pt-module-config-bar" style="display:flex;align-items:center;justify-content:space-between;padding:4px 8px;border-radius:6px;border:1px solid var(--SmartThemeBorderColor);margin-bottom:10px;background:rgba(0,0,0,0.05);">
+    <span class="plot-label" style="font-size:0.8em;font-weight:normal;">启用流式输出 (Stream Response)</span>
+    <label class="plot-switch">
+        <input type="checkbox" id="pt-module-stream-toggle">
+        <span class="plot-switch-slider"></span>
+    </label>
+</div>
+
+<!-- Block list -->
+<div id="pt-block-list" style="display:flex;flex-direction:column;gap:8px;"></div>
+
+<!-- Cheat sheet accordion -->
+<div style="border:1px solid var(--SmartThemeBorderColor);border-radius:6px;overflow:hidden;margin-top:10px;">
+    <div id="pt-cheat-hdr" style="padding:6px 12px;background:rgba(0,0,0,0.1);cursor:pointer;display:flex;justify-content:space-between;align-items:center;user-select:none;">
+        <span style="font-size:0.82em;font-weight:bold;color:var(--SmartThemeEmColor);"><i class="fa-solid fa-tags"></i> 可用模板插槽</span>
+        <i id="pt-cheat-icon" class="fa-solid fa-chevron-down" style="font-size:0.82em;"></i>
+    </div>
+    <div id="pt-cheat-body" style="display:none;padding:10px;flex-direction:column;gap:5px;font-size:0.79em;"></div>
+</div>

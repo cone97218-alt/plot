@@ -1,0 +1,151 @@
+<div class="plot-panel-wrapper" style="position: relative; height: 100%; display: flex; flex-direction: column;">
+    <!-- 1. Sub Tabs (Filters) & Mode Select & Settings Gear -->
+    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; border-bottom: 1px solid var(--SmartThemeBorderColor); padding-bottom: 8px; flex-shrink: 0; gap: 10px;">
+        <!-- Left: Filters -->
+        <div class="plot-sub-tab-bar" id="plot-goals-filter-bar" style="margin-bottom: 0; border-bottom: none; padding-bottom: 0; display: flex; gap: 4px; flex-shrink: 0;">
+            <button class="plot-sub-tab active" data-filter="active" title="进行中"><i class="fa-solid fa-person-running"></i></button>
+            <button class="plot-sub-tab" data-filter="complete" title="已完成"><i class="fa-solid fa-circle-check"></i></button>
+            <button class="plot-sub-tab" data-filter="failed" title="已失败"><i class="fa-solid fa-circle-xmark"></i></button>
+            <button class="plot-sub-tab" data-filter="all" title="全部"><i class="fa-solid fa-list"></i></button>
+        </div>
+        
+        <!-- Right: Mode Dropdown & Config Icon -->
+        <div style="display: flex; gap: 6px; align-items: center; flex: 1; justify-content: flex-end; min-width: 0;">
+            <select id="plot-goals-mode-select" class="plot-select" style="padding: 2px 6px; font-size: 0.82em; max-width: 130px; flex: 1; min-width: 80px;">
+                <!-- Populated dynamically -->
+            </select>
+            <button id="plot-goals-settings-btn" class="plot-btn" style="padding: 4px 8px; display: flex; align-items: center; justify-content: center; flex-shrink: 0;" title="配置目标模块选项">
+                <i class="fa-solid fa-sliders"></i>
+            </button>
+        </div>
+    </div>
+
+    <!-- 2. Scrollable Tree List Area -->
+    <div class="plot-tab-content" id="plot-goals-tree-container" style="flex: 1; overflow-y: auto; padding: 5px 0; display: flex; flex-direction: column; gap: 8px;">
+        <!-- Dynamically rendered tree goes here -->
+    </div>
+
+    <!-- 3. Bottom Controls (No Chinese Text next to icons) -->
+    <div style="border-top: 1px solid var(--SmartThemeBorderColor); padding-top: 10px; margin-top: 10px; display: flex; justify-content: space-between; align-items: center; flex-shrink: 0;">
+        <button id="plot-goal-clear-all-btn" class="plot-btn" style="padding: 6px 12px; color: var(--SmartThemeQuoteColor); display: flex; align-items: center; justify-content: center; flex-shrink: 0; border: none; background: none;" title="清空当前所有目标 (单聊初始化)">
+            <i class="fa-solid fa-trash-can"></i>
+        </button>
+        <div style="display: flex; gap: 8px;">
+            <button id="plot-goal-add-trigger-btn" class="plot-btn" style="padding: 6px 12px; display: flex; align-items: center; justify-content: center; flex-shrink: 0;" title="手动配置并添加新目标">
+                <i class="fa-solid fa-plus"></i>
+            </button>
+            <button id="plot-goal-ai-gen-btn" class="plot-btn" style="padding: 6px 12px; border: none; background: none; color: var(--SmartThemeEmColor); display: flex; align-items: center; justify-content: center; flex-shrink: 0;" title="AI 智能规划生成目标">
+                <i class="fa-solid fa-wand-magic-sparkles"></i>
+            </button>
+        </div>
+    </div>
+
+    <!-- Loading Overlay -->
+    <div id="plot-goals-loading-overlay" style="position: absolute; inset: 0; background-color: rgba(var(--SmartThemeBlurTintColor-rgb, 20,20,30), 0.75); z-index: 1010; display: none; flex-direction: column; align-items: center; justify-content: center; gap: 12px;">
+        <i class="fa-solid fa-wand-magic-sparkles fa-spin" style="font-size: 2.2em; color: var(--SmartThemeEmColor);"></i>
+        <span style="font-size: 0.9em; font-weight: bold; color: var(--SmartThemeBodyColor);">AI 智能规划生成目标中，请稍候...</span>
+    </div>
+
+    <!-- 4. Detail Configuration Drawer -->
+    <div class="plot-bts-drawer" id="plot-goal-config-drawer" style="position: absolute; inset: 0; background-color: rgba(var(--SmartThemeBlurTintColor-rgb, 20,20,30), 1); z-index: 100; display: none; flex-direction: column;">
+        <!-- Drawer Header -->
+        <div class="plot-bts-drawer-header" style="display: flex; justify-content: space-between; align-items: center; padding: 10px 14px; border-bottom: 1px solid var(--SmartThemeBorderColor); background-color: var(--SmartThemeChatTintColor); flex-shrink: 0;">
+            <span class="plot-bts-drawer-title" style="font-weight: bold; color: var(--SmartThemeEmColor); font-size: 0.95em;"><i class="fa-solid fa-gear"></i> 配置任务详情</span>
+            <i class="fa-solid fa-xmark" id="plot-goal-drawer-close" style="cursor: pointer; font-size: 1.3em; color: var(--SmartThemeEmColor); padding: 4px;"></i>
+        </div>
+
+        <!-- Drawer Body (Form) -->
+        <div class="plot-bts-drawer-body" style="flex: 1; overflow-y: auto; padding: 14px; display: flex; flex-direction: column; gap: 14px;">
+            <input type="hidden" id="plot-drawer-goal-id">
+
+            <!-- Title & Desc -->
+            <div class="plot-setting-group">
+                <label class="plot-label">任务名称</label>
+                <input type="text" id="plot-drawer-goal-title" class="plot-input" style="width: 100%;">
+            </div>
+
+            <div class="plot-setting-group">
+                <label class="plot-label">任务描述</label>
+                <textarea id="plot-drawer-goal-desc" class="plot-input" rows="3" style="width: 100%; resize: vertical; font-size: 0.9em;"></textarea>
+            </div>
+
+            <div style="display: flex; gap: 10px; width: 100%;">
+                <div class="plot-setting-group" style="flex: 1;">
+                    <label class="plot-label">所属父目标</label>
+                    <select id="plot-drawer-goal-parent" class="plot-select" style="width: 100%;">
+                        <option value="">-- 无父目标 --</option>
+                    </select>
+                </div>
+                <div class="plot-setting-group" style="flex: 1;">
+                    <label class="plot-label">达成判定类型</label>
+                    <select id="plot-drawer-goal-type" class="plot-select" style="width: 100%;">
+                        <option value="manual">手动勾选</option>
+                        <option value="variable">变量自动判定</option>
+                        <option value="keyword">关键词自动判定</option>
+                        <option value="ai">AI智能判定</option>
+                    </select>
+                </div>
+            </div>
+
+            <!-- Custom Extra Fields -->
+            <div class="plot-setting-group" id="plot-drawer-custom-fields-group" style="display: flex; flex-direction: column; gap: 6px; border: 1px solid var(--SmartThemeBorderColor); border-radius: 6px; padding: 10px; background: rgba(0,0,0,0.15); margin-bottom: 10px;">
+                <div style="display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid rgba(255,255,255,0.05); padding-bottom: 4px; margin-bottom: 4px;">
+                    <label class="plot-label" style="color: var(--SmartThemeEmColor); margin: 0;"><i class="fa-solid fa-puzzle-piece"></i> 自定义扩展属性</label>
+                    <button id="plot-drawer-add-custom-field-btn" class="menu_button plot-btn" style="padding: 1px 6px; font-size: 0.72em; display: flex; align-items: center; gap: 3px;"><i class="fa-solid fa-plus"></i> 添加属性</button>
+                </div>
+                <div id="plot-drawer-custom-fields-list" style="display: flex; flex-direction: column; gap: 6px;">
+                    <!-- Custom key-value input fields are injected here dynamically -->
+                </div>
+            </div>
+
+            <!-- Conditional Trigger Area -->
+            <div id="plot-drawer-cond-variable-group" class="plot-setting-group" style="display: none; border: 1px solid var(--SmartThemeBorderColor); border-radius: 6px; padding: 10px; background: rgba(0,0,0,0.15);">
+                <label class="plot-label" style="color: var(--SmartThemeEmColor);"><i class="fa-solid fa-code"></i> 变量判定条件</label>
+                <input type="text" id="plot-drawer-cond-variable-expr" class="plot-input" placeholder="输入JS表达式，例如：relationship >= 60" style="width: 100%; font-family: monospace;">
+                <span class="plot-hint-text">可用的变量名请参考“变量”模块的注册名称。条件会在任何变量被更新时自动解算。</span>
+            </div>
+
+            <div id="plot-drawer-cond-keyword-group" class="plot-setting-group" style="display: none; border: 1px solid var(--SmartThemeBorderColor); border-radius: 6px; padding: 10px; background: rgba(0,0,0,0.15);">
+                <label class="plot-label" style="color: var(--SmartThemeEmColor);"><i class="fa-solid fa-key"></i> 关键词判定（逗号分隔）</label>
+                <input type="text" id="plot-drawer-cond-keywords" class="plot-input" placeholder="输入关键词，例如：相信我, 结伴同行" style="width: 100%;">
+                <span class="plot-hint-text">当 AI 的单次回复中包含了上述任一关键词时，该任务将自动达成。</span>
+            </div>
+
+            <!-- Cascading Actions Manager -->
+            <div style="border: 1px solid var(--SmartThemeBorderColor); border-radius: 6px; padding: 10px; background: rgba(0,0,0,0.15); display: flex; flex-direction: column; gap: 8px;">
+                <div style="display: flex; justify-content: space-between; align-items: center;">
+                    <span class="plot-label" style="color: var(--SmartThemeEmColor);"><i class="fa-solid fa-bolt"></i> 级联动作 (Trigger Actions)</span>
+                    <button id="plot-drawer-add-action-btn" class="menu_button plot-btn" style="padding: 2px 8px; font-size: 0.8em;"><i class="fa-solid fa-plus"></i> 添加动作</button>
+                </div>
+                
+                <!-- Action List -->
+                <div id="plot-drawer-action-list" style="display: flex; flex-direction: column; gap: 6px; max-height: 150px; overflow-y: auto;">
+                    <!-- Actions render here -->
+                </div>
+            </div>
+        </div>
+
+        <!-- Drawer Footer Buttons -->
+        <div style="border-top: 1px solid var(--SmartThemeBorderColor); padding: 10px 14px; background-color: var(--SmartThemeChatTintColor); display: flex; justify-content: flex-end; gap: 8px; flex-shrink: 0;">
+            <button id="plot-goal-config-cancel" class="menu_button plot-btn" style="padding: 6px 16px; font-size: 0.9em;">取消</button>
+            <button id="plot-goal-config-save" class="menu_button plot-btn" style="padding: 6px 16px; font-size: 0.9em; background-color: var(--SmartThemeEmColor); color: var(--SmartThemeInputBgColor); font-weight: bold; border-color: var(--SmartThemeEmColor);">保存</button>
+        </div>
+    </div>
+
+    <!-- AI Preview & Confirmation Dialog -->
+    <div id="plot-goal-ai-preview-modal" style="position: absolute; inset: 0; background-color: rgba(var(--SmartThemeBlurTintColor-rgb, 20,20,30), 0.95); z-index: 1020; display: none; flex-direction: column; padding: 15px; box-sizing: border-box; gap: 10px;">
+        <div style="display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid var(--SmartThemeBorderColor); padding-bottom: 8px; flex-shrink: 0;">
+            <h3 style="margin: 0; color: var(--SmartThemeEmColor); font-size: 1.05em; font-weight: bold;"><i class="fa-solid fa-wand-magic-sparkles"></i> AI 规划预览</h3>
+            <i id="plot-ai-preview-close" class="fa-solid fa-xmark" style="cursor: pointer; font-size: 1.25em; color: var(--SmartThemeEmColor);"></i>
+        </div>
+        
+        <div id="plot-ai-preview-list" style="flex: 1; overflow-y: auto; display: flex; flex-direction: column; gap: 8px; padding: 5px 0;">
+            <!-- Preview list of generated goals -->
+        </div>
+        
+        <div style="border-top: 1px solid var(--SmartThemeBorderColor); padding-top: 10px; display: flex; gap: 8px; justify-content: flex-end; flex-shrink: 0; flex-wrap: wrap;">
+            <button id="plot-ai-preview-regen" class="menu_button plot-btn" style="padding: 6px 12px; font-size: 0.85em; display: flex; align-items: center; gap: 4px;"><i class="fa-solid fa-arrows-rotate"></i> 重新生成</button>
+            <button id="plot-ai-preview-append" class="menu_button plot-btn" style="padding: 6px 12px; font-size: 0.85em; background-color: var(--SmartThemeEmColor); color: var(--SmartThemeInputBgColor); font-weight: bold; border-color: var(--SmartThemeEmColor); display: flex; align-items: center; gap: 4px;"><i class="fa-solid fa-check"></i> 接受目标</button>
+        </div>
+    </div>
+</div>

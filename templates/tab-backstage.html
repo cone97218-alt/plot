@@ -1,0 +1,331 @@
+<div class="plot-bts-container" id="plot-bts-root">
+    <!-- 1. Header Control Bar -->
+    <div class="plot-bts-header" style="overflow: hidden; padding: 4px 8px !important;">
+        <div class="plot-bts-header-row" style="display: flex; gap: 8px; align-items: center; width: 100%; justify-content: space-between; flex-wrap: nowrap; overflow: hidden; padding: 0;">
+            <!-- Left scrollable controls -->
+            <div class="plot-bts-header-left" style="display: flex; gap: 6px; align-items: center; flex-wrap: nowrap; overflow-x: auto; flex: 1; padding-right: 8px; scrollbar-width: none; -ms-overflow-style: none; -webkit-overflow-scrolling: touch;">
+                <i id="plot-bts-scope-indicator" class="fa-solid fa-comments" style="opacity: 0.8; font-size: 0.9em; margin-right: 2px; flex-shrink: 0;" title="数据绑定域"></i>
+                <span class="plot-label" style="font-size: 0.82em; opacity: 0.8; white-space: nowrap; flex-shrink: 0;">模式:</span>
+                <select id="plot-bts-mode-select" class="plot-select" style="padding: 2px 6px; font-size: 0.85em; min-width: 100px; max-width: 150px; flex-shrink: 0;">
+                    <!-- Dynamically populated -->
+                </select>
+                
+                <span class="plot-label" style="font-size: 0.82em; opacity: 0.8; margin-left: 6px; white-space: nowrap; flex-shrink: 0;">分支:</span>
+                <select id="plot-bts-thread-select" class="plot-select" style="padding: 2px 6px; font-size: 0.85em; min-width: 100px; max-width: 150px; flex-shrink: 0;">
+                    <!-- Dynamically populated -->
+                </select>
+                <button id="plot-bts-thread-add-btn" class="plot-btn" style="padding: 2px 6px; flex-shrink: 0;" title="新建对话分支">
+                    <i class="fa-solid fa-plus"></i>
+                </button>
+                <button id="plot-bts-thread-del-btn" class="plot-btn" style="padding: 2px 6px; flex-shrink: 0;" title="删除当前分支">
+                    <i class="fa-solid fa-trash-can"></i>
+                </button>
+                <button id="plot-bts-clear-btn" class="plot-btn" style="padding: 2px 6px; flex-shrink: 0;" title="清空当前分支的所有对话历史">
+                    <i class="fa-solid fa-broom"></i>
+                </button>
+            </div>
+            <!-- Right fixed control -->
+            <button id="plot-bts-cfg-toggle-btn" class="plot-btn" style="padding: 2px 6px; flex-shrink: 0;" title="配置当前模式与选项">
+                <i class="fa-solid fa-sliders"></i>
+            </button>
+        </div>
+    </div>
+
+    <!-- 2. Dialogue Area -->
+    <div class="plot-bts-dialogue-area" id="plot-bts-dialogue-area">
+        <!-- Message list populated dynamically -->
+    </div>
+
+    <!-- 3. Input Footer -->
+    <div class="plot-bts-input-area">
+        <textarea id="plot-bts-input" class="plot-bts-textarea" placeholder="输入你想与 AI 探讨的幕后设定..." rows="1"></textarea>
+        <button id="plot-bts-send-btn" class="plot-bts-send-btn" title="发送 (Enter)">
+            <i class="fa-solid fa-paper-plane" id="plot-bts-send-icon"></i>
+        </button>
+    </div>
+
+    <!-- 4. Unified Slide-up Drawer: Configurations -->
+    <div class="plot-bts-drawer" id="plot-bts-config-drawer">
+        <div class="plot-bts-drawer-header">
+            <span class="plot-bts-drawer-title"><i class="fa-solid fa-sliders"></i> 配置幕后选项</span>
+            <button class="plot-popup-close-btn" id="plot-bts-config-drawer-close">
+                <i class="fa-solid fa-xmark"></i>
+            </button>
+        </div>
+        
+        <!-- Tab Navigation inside Drawer -->
+        <div class="plot-sub-tab-bar" id="plot-bts-cfg-tabs" style="padding: 10px 14px 0 14px; margin-bottom: 0; border-bottom: 1px solid var(--SmartThemeBorderColor); flex-shrink: 0;">
+            <button class="plot-sub-tab active" data-cfgtab="mode">模式设置</button>
+            <button class="plot-sub-tab" data-cfgtab="theme">个性主题</button>
+            <button class="plot-sub-tab" data-cfgtab="global">通用设置</button>
+        </div>
+
+        <div class="plot-bts-drawer-body" style="padding: 14px; overflow-y: auto; flex: 1;">
+            
+            <!-- Pane 1: Mode Details & Custom Reading Strategy Combined -->
+            <div id="plot-bts-cfg-pane-mode" class="plot-bts-cfg-pane" style="display: flex; flex-direction: column; gap: 12px;">
+                <div style="display: flex; justify-content: space-between; align-items: center;">
+                    <span class="plot-label" style="font-weight: bold; color: var(--SmartThemeEmColor);">管理幕后模式</span>
+                    <div style="display: flex; gap: 6px;">
+                        <button id="plot-bts-mode-add-btn" class="plot-btn" style="padding: 2px 8px; font-size: 0.8em; border-color: var(--SmartThemeEmColor); color: var(--SmartThemeEmColor);">
+                            <i class="fa-solid fa-plus"></i> 新建模式
+                        </button>
+                        <button id="plot-bts-mode-delete-btn" class="plot-btn" style="padding: 2px 8px; font-size: 0.8em; color: var(--SmartThemeQuoteColor); border-color: var(--SmartThemeQuoteColor);">
+                            <i class="fa-solid fa-trash"></i> 删除该模式
+                        </button>
+                    </div>
+                </div>
+
+                <div class="plot-setting-group">
+                    <label class="plot-label">模式名称</label>
+                    <input type="text" id="plot-bts-mode-name" class="plot-input" placeholder="输入模式名称，例如: 剧情推动">
+                </div>
+
+                <div class="plot-setting-group">
+                    <label class="plot-label">绑定提示词预设</label>
+                    <select id="plot-bts-mode-preset" class="plot-select" style="width: 100%;">
+                        <!-- Populated dynamically -->
+                    </select>
+                    <div style="font-size: 0.75em; color: var(--SmartThemeEmColor); margin-top: 4px;">
+                        在顶部主菜单的“提示词” -> “幕后”子选项卡下可以编辑、新建或导入这些提示词预设和卡片块。
+                    </div>
+                </div>
+
+                <div class="plot-setting-group">
+                    <label class="plot-label">数据保存绑定域</label>
+                    <select id="plot-bts-mode-storage-scope" class="plot-select" style="width: 100%;">
+                        <option value="chat">绑定聊天会话</option>
+                        <option value="character">绑定当前角色</option>
+                        <option value="global">全局共享</option>
+                    </select>
+                </div>
+
+                <label style="display: flex; align-items: center; gap: 8px; font-size: 0.92em; font-weight: bold; cursor: pointer; padding-top: 8px; padding-bottom: 8px; border-top: 1px solid var(--SmartThemeBorderColor); margin-top: 5px;">
+                    <input type="checkbox" id="plot-bts-conn-custom-toggle">
+                    为此模式启用单独的 API 连接
+                </label>
+
+                <div id="plot-bts-conn-config-container" style="display: none; flex-direction: column; gap: 12px; margin-top: 5px; margin-bottom: 5px;">
+                    <div class="plot-setting-group">
+                        <select id="plot-bts-mode-connection" class="plot-select" style="width: 100%;">
+                            <option value="default">SillyTavern 默认连接</option>
+                            <!-- Populated dynamically -->
+                        </select>
+                    </div>
+                </div>
+
+                <label style="display: flex; align-items: center; gap: 8px; font-size: 0.92em; font-weight: bold; cursor: pointer; padding-top: 8px; padding-bottom: 8px; border-bottom: 1px solid var(--SmartThemeBorderColor); border-top: 1px solid var(--SmartThemeBorderColor); margin-top: 5px;">
+                    <input type="checkbox" id="plot-bts-read-custom-toggle">
+                    为此模式启用单独的内容读取策略
+                </label>
+
+                <!-- Collapsible Settings Container -->
+                <div id="plot-bts-read-config-container" style="display: none; flex-direction: column; gap: 12px; margin-top: 5px;">
+                    <div class="plot-accordion" style="border: 1px solid var(--SmartThemeBorderColor); border-radius: 6px; overflow: hidden;">
+                        
+                        <!-- Accordion 1: Chat history limit & Regex -->
+                        <div class="plot-accordion-section">
+                            <div class="plot-accordion-header" id="plot-bts-acc-hdr-history">
+                                <span class="plot-accordion-title">对话历史</span>
+                                <i class="fa-solid fa-chevron-down plot-accordion-icon"></i>
+                            </div>
+                            <div class="plot-accordion-body" id="plot-bts-acc-body-history" style="display: none;">
+                                <div class="plot-setting-group" style="margin-bottom: 12px;">
+                                    <label class="plot-label">历史对话读取深度</label>
+                                    <input type="number" id="plot-bts-read-limit" class="plot-input" min="0" style="width:100%;">
+                                    <div style="font-size:0.72em; color:var(--SmartThemeEmColor); margin-top:2px;">
+                                        最近的消息条数。设置为 0 时拉取全部。
+                                    </div>
+                                </div>
+
+                                <!-- Nested Accordion: Regex Filters -->
+                                <div class="plot-accordion-section" style="border: 1px solid var(--SmartThemeBorderColor); border-radius: 4px; overflow: hidden; margin-top: 10px;">
+                                    <div class="plot-accordion-header" id="plot-bts-acc-hdr-regex" style="padding: 8px 12px; background: rgba(0,0,0,0.05);">
+                                        <span class="plot-accordion-title" style="font-size: 0.85em;">正则裁剪规则</span>
+                                        <i class="fa-solid fa-chevron-down plot-accordion-icon" style="font-size: 0.85em;"></i>
+                                    </div>
+                                    <div class="plot-accordion-body" id="plot-bts-acc-body-regex" style="display: none; padding: 10px; background: transparent;">
+                                        <div style="display: flex; justify-content: flex-end; margin-bottom: 8px;">
+                                            <button id="plot-bts-regex-add-btn" class="menu_button plot-btn" style="padding: 2px 8px; font-size: 0.8em;">
+                                                <i class="fa-solid fa-plus"></i> 新建规则
+                                            </button>
+                                        </div>
+                                        <div id="plot-bts-mode-regex-list" style="display: flex; flex-direction: column; gap: 8px;">
+                                            <!-- Dynamic regex rules list -->
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Accordion 2: Persona Description -->
+                        <div class="plot-accordion-section">
+                            <div class="plot-accordion-header" id="plot-bts-acc-hdr-persona">
+                                <span class="plot-accordion-title">设定与描述</span>
+                                <i class="fa-solid fa-chevron-down plot-accordion-icon"></i>
+                            </div>
+                            <div class="plot-accordion-body" id="plot-bts-acc-body-persona" style="display: none;">
+                                <div style="display: flex; flex-direction: column; gap: 8px;">
+                                    <label style="display: flex; align-items: center; gap: 8px; cursor: pointer;">
+                                        <input type="checkbox" id="plot-bts-read-char-desc"> 注入角色卡设定描述
+                                    </label>
+                                    <label style="display: flex; align-items: center; gap: 8px; cursor: pointer;">
+                                        <input type="checkbox" id="plot-bts-read-user-desc"> 注入当前用户描述
+                                    </label>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Accordion 3: Lorebook settings (Default Collapsed) -->
+                        <div class="plot-accordion-section">
+                            <div class="plot-accordion-header" id="plot-bts-acc-hdr-wi">
+                                <span class="plot-accordion-title">世界书设定</span>
+                                <i class="fa-solid fa-chevron-down plot-accordion-icon"></i>
+                            </div>
+                            <div class="plot-accordion-body" id="plot-bts-acc-body-wi" style="display: none; padding: 12px; flex-direction: column; gap: 10px;">
+                                <!-- 角色书 -->
+                                <div>
+                                    <label style="display: flex; align-items: center; gap: 8px; cursor: pointer; font-size: 0.9em;">
+                                        <input type="checkbox" id="plot-bts-read-wi-char"> 注入角色卡绑定的世界书
+                                    </label>
+                                    <div id="plot-bts-wi-char-container" style="margin-left:15px; margin-top:4px;"></div>
+                                </div>
+
+                                <!-- 全局书 -->
+                                <div style="border-top:1px solid rgba(255,255,255,0.05); padding-top:8px;">
+                                    <label style="display: flex; align-items: center; gap: 8px; cursor: pointer; font-size: 0.9em;">
+                                        <input type="checkbox" id="plot-bts-read-wi-global"> 注入全局启用的世界书
+                                    </label>
+                                    <div id="plot-bts-wi-global-container" style="margin-left:15px; margin-top:4px;"></div>
+                                </div>
+
+                                <!-- 聊天独立书 -->
+                                <div style="border-top:1px solid rgba(255,255,255,0.05); padding-top:8px;">
+                                    <label style="display: flex; align-items: center; gap: 8px; cursor: pointer; font-size: 0.9em;">
+                                        <input type="checkbox" id="plot-bts-read-wi-chat"> 注入当前聊天绑定的独立世界书
+                                    </label>
+                                    <div id="plot-bts-wi-chat-container" style="margin-left:15px; margin-top:4px;"></div>
+                                </div>
+
+                                <!-- 独立自定义世界书 -->
+                                <div style="border-top: 1px solid rgba(255,255,255,0.05); padding-top: 8px;">
+                                    <label class="plot-label" style="font-size: 0.85em; font-weight: bold; margin-bottom: 4px; display: block;">独立启用世界书</label>
+                                    <select id="plot-bts-read-wi-custom" class="plot-select" style="width: 100%; margin-bottom: 4px;">
+                                        <!-- custom worldbook select options -->
+                                    </select>
+                                    <div id="plot-bts-wi-custom-container" style="margin-left:15px; margin-top:4px;"></div>
+                                </div>
+
+                                <!-- 全局过滤设置 -->
+                                <div class="plot-accordion-section" style="border: 1px solid var(--SmartThemeBorderColor); border-radius: 4px; overflow: hidden; margin-top: 10px;">
+                                    <div class="plot-accordion-header" id="plot-bts-acc-hdr-wi-filter" style="padding: 6px 12px; background: rgba(0,0,0,0.05);">
+                                        <span class="plot-accordion-title" style="font-size: 0.82em;">全局过滤设置</span>
+                                        <i class="fa-solid fa-chevron-down plot-accordion-icon" style="font-size: 0.82em;"></i>
+                                    </div>
+                                    <div class="plot-accordion-body" id="plot-bts-acc-body-wi-filter" style="display: none; padding: 10px; background: transparent;">
+                                        <div style="margin-bottom:8px;">
+                                            <label class="plot-label" style="font-size: 0.85em; font-weight: normal; margin-bottom:4px; display:block;">排除的世界书条目名称/前缀</label>
+                                            <input type="text" id="plot-bts-read-wi-exclude" class="plot-input" placeholder="例如: system_, hidden_" style="width:100%;">
+                                        </div>
+                                        <div>
+                                            <label class="plot-label" style="font-size: 0.85em; font-weight: normal; margin-bottom:4px; display:block;">只注入匹配名称/前缀的条目</label>
+                                            <input type="text" id="plot-bts-read-wi-include" class="plot-input" placeholder="例如: plot_, state_" style="width:100%;">
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Accordion 4: JS Summary expression -->
+                        <div class="plot-accordion-section">
+                            <div class="plot-accordion-header" id="plot-bts-acc-hdr-other">
+                                <span class="plot-accordion-title">其他参数与JS表达式</span>
+                                <i class="fa-solid fa-chevron-down plot-accordion-icon"></i>
+                            </div>
+                            <div class="plot-accordion-body" id="plot-bts-acc-body-other" style="display: none;">
+                                <div class="plot-setting-group">
+                                    <label class="plot-label">第三方总结数据获取 JS 表达式</label>
+                                    <input type="text" id="plot-bts-read-summary" class="plot-input" placeholder="例如: extension_settings.summarize?.summary" style="width: 100%; font-family: monospace;">
+                                </div>
+                            </div>
+                        </div>
+
+                    </div>
+                </div>
+            </div>
+
+            <!-- Pane 2: Themes & Bubbles -->
+            <div id="plot-bts-cfg-pane-theme" class="plot-bts-cfg-pane" style="display: none; flex-direction: column; gap: 12px;">
+                <div style="display: flex; gap: 8px; align-items: flex-end;">
+                    <div class="plot-setting-group" style="flex: 1;">
+                        <label class="plot-label">选择/新建主题</label>
+                        <select id="plot-bts-theme-mgr-select" class="plot-select">
+                            <option value="default">默认主题 (跟随全局)</option>
+                            <!-- populated dynamic themes -->
+                        </select>
+                    </div>
+                    <button id="plot-bts-theme-new-btn" class="plot-btn" style="height: 34px;" title="新建主题"><i class="fa-solid fa-plus"></i></button>
+                    <button id="plot-bts-theme-delete-btn" class="plot-btn" style="height: 34px; color: var(--SmartThemeQuoteColor); border-color: var(--SmartThemeQuoteColor);" title="删除当前主题"><i class="fa-solid fa-trash"></i></button>
+                </div>
+
+                <div class="plot-setting-group">
+                    <label class="plot-label">主题名称</label>
+                    <input type="text" id="plot-bts-theme-name" class="plot-input" placeholder="输入自定义主题名称">
+                </div>
+
+                <!-- Custom CSS editor (Collapsed by Default) -->
+                <div class="plot-accordion-section" style="border: 1px solid var(--SmartThemeBorderColor); border-radius: 4px; overflow: hidden; margin-top: 10px;">
+                    <div class="plot-accordion-header" id="plot-bts-theme-css-hdr" style="padding: 8px 12px; background: rgba(0,0,0,0.05); border-bottom: none;">
+                        <span class="plot-accordion-title" style="font-size: 0.85em;">自定义 CSS 样式</span>
+                        <i class="fa-solid fa-chevron-down plot-accordion-icon" style="font-size: 0.85em;"></i>
+                    </div>
+                    <div class="plot-accordion-body" id="plot-bts-theme-css-body" style="display: none; padding: 10px; background: transparent;">
+                        <textarea id="plot-bts-theme-css" class="plot-input" rows="8" placeholder="/* 在这里编写自定义 CSS，例如： */&#10;.plot-bts-bubble {&#10;  background-color: #3182ce;&#10;  color: #fff;&#10;}" style="width: 100%; font-family: monospace; font-size: 0.85em; resize: vertical;"></textarea>
+                    </div>
+                </div>
+
+                <!-- Avatar Frame Image URL -->
+                <div class="plot-setting-group" style="margin-top: 10px;">
+                    <label class="plot-label">自定义头像框图片链接</label>
+                    <input type="text" id="plot-bts-theme-frame-url" class="plot-input" placeholder="输入头像框图片 URL 链接（支持 GIF/PNG）">
+                </div>
+
+                <div style="display: flex; gap: 8px; border-top: 1px solid var(--SmartThemeBorderColor); padding-top: 12px; margin-top: 4px;">
+                    <button id="plot-bts-theme-export" class="plot-btn" style="font-size: 0.82em; padding: 4px 8px;" title="导出当前主题"><i class="fa-solid fa-download"></i> 导出主题</button>
+                    <button id="plot-bts-theme-import" class="plot-btn" style="font-size: 0.82em; padding: 4px 8px;" title="导入主题 JSON"><i class="fa-solid fa-upload"></i> 导入主题</button>
+                    <input type="file" id="plot-bts-theme-file-input" style="display: none;" accept=".json">
+                </div>
+            </div>
+
+            <!-- Pane 3: Dialogue settings -->
+            <div id="plot-bts-cfg-pane-global" class="plot-bts-cfg-pane" style="display: none; flex-direction: column; gap: 12px;">
+                <div class="plot-setting-group">
+                    <label class="plot-label">头像显示设置</label>
+                    <select id="plot-bts-avatar-option" class="plot-select" style="width: 100%;">
+                        <option value="show">显示头像</option>
+                        <option value="hide">隐藏头像</option>
+                    </select>
+                </div>
+
+
+                <!-- Custom Avatars URLs -->
+                <div class="plot-setting-group">
+                    <label class="plot-label">自定义 AI 头像链接 (URL)</label>
+                    <input type="text" id="plot-bts-custom-bot-avatar" class="plot-input" placeholder="输入自定义 AI 头像图片链接，留空则沿用角色头像">
+                </div>
+
+                <div class="plot-setting-group">
+                    <label class="plot-label">自定义用户头像链接 (URL)</label>
+                    <input type="text" id="plot-bts-custom-user-avatar" class="plot-input" placeholder="输入自定义用户头像图片链接，留空则沿用默认用户头像">
+                </div>
+            </div>
+
+        </div>
+
+        <div class="plot-bts-drawer-footer" style="padding: 10px 14px; border-top: 1px solid var(--SmartThemeBorderColor); display: flex; justify-content: flex-end; background-color: var(--SmartThemeChatTintColor); flex-shrink: 0;">
+            <button id="plot-bts-cfg-save-btn" class="plot-btn" style="border-color: var(--SmartThemeEmColor); color: var(--SmartThemeEmColor); font-weight: bold; padding: 6px 16px;">
+                保存并应用
+            </button>
+        </div>
+    </div>
+</div>
