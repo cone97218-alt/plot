@@ -225,53 +225,78 @@ export function evaluateVariableGoals() {
     if (_isEvaluatingVariableGoals) return;
     _isEvaluatingVariableGoals = true;
     try {
-    const goals = { ...(get('goals') || {}) };
-    const vars = get('variables') || {};
-    
-    // Construct evaluation context with variable values
-    const context = {};
-    for (const [name, entry] of Object.entries(vars)) {
-        context[name] = (typeof entry === 'object' && entry !== null && 'value' in entry) 
-            ? entry.value 
-            : entry;
-    }
-    
-    let changed = false;
-    const completedGoalActions = [];
-    
-    Object.values(goals).forEach(goal => {
-        if (goal.status === 'active' && goal.type === 'variable' && goal.conditions?.variable) {
-            const isMet = evalExpression(goal.conditions.variable, context);
-            if (isMet) {
-                goal.status = 'complete';
-                changed = true;
-                completedGoalActions.push(goal.actions || []);
-                console.log(`[Plot GoalEngine] Goal "${goal.id}" complete by Variable condition: ${goal.conditions.variable}`);
+        const goals = { ...(get('goals') || {}) };
+        const vars = get('variables') || {};
+        
+        // Construct evaluation context with variable values
+        const context = {};
+        for (const [name, entry] of Object.entries(vars)) {
+            context[name] = (typeof entry === 'object' && entry !== null && 'value' in entry) 
+                ? entry.value 
+                : entry;
+        }
+        
+        let changed = false;
+        const completedGoalActions = [];
+        
+        Object.values(goals).forEach(goal => {
+            if (goal.status === 'active' && goal.type === 'variable') {
+                // 1. Check completion condition
+                if (goal.conditions?.variable) {
+                    const isMet = evalExpression(goal.conditions.variable, context);
+                    if (isMet) {
+                        goal.status = 'complete';
+                        changed = true;
+                        completedGoalActions.push(goal.actions || []);
+                        console.log(`[Plot GoalEngine] Goal "${goal.id}" complete by Variable condition: ${goal.conditions.variable}`);
+                        
+                        if (typeof toastr !== 'undefined') {
+                            const usedVars = Object.keys(context).filter(k => goal.conditions.variable.includes(k));
+                            const ctxDesc = usedVars.map(k => `${k} = ${context[k]}`).join(', ');
+                            toastr.success(
+                                `完成方式：变量判定\n触发条件：${goal.conditions.variable} (当前: ${ctxDesc})`,
+                                `🎉 剧情目标自动达成：【${goal.title}】`,
+                                { timeOut: 12000, closeButton: true }
+                            );
+                        }
+                        return; // Skip failure check if completed
+                    }
+                }
                 
-                if (typeof toastr !== 'undefined') {
-                    const usedVars = Object.keys(context).filter(k => goal.conditions.variable.includes(k));
-                    const ctxDesc = usedVars.map(k => `${k} = ${context[k]}`).join(', ');
-                    toastr.success(
-                        `完成方式：变量判定\n触发条件：${goal.conditions.variable} (当前: ${ctxDesc})`,
-                        `🎉 剧情目标自动达成：【${goal.title}】`,
-                        { timeOut: 12000, closeButton: true }
-                    );
+                // 2. Check failure condition
+                if (goal.conditions?.variableFail) {
+                    const isFailed = evalExpression(goal.conditions.variableFail, context);
+                    if (isFailed) {
+                        goal.status = 'failed';
+                        changed = true;
+                        completedGoalActions.push(goal.actions || []);
+                        console.log(`[Plot GoalEngine] Goal "${goal.id}" failed by Variable condition: ${goal.conditions.variableFail}`);
+                        
+                        if (typeof toastr !== 'undefined') {
+                            const usedVars = Object.keys(context).filter(k => goal.conditions.variableFail.includes(k));
+                            const ctxDesc = usedVars.map(k => `${k} = ${context[k]}`).join(', ');
+                            toastr.error(
+                                `失败方式：变量判定\n触发条件：${goal.conditions.variableFail} (当前: ${ctxDesc})`,
+                                `❌ 剧情目标自动失败：【${goal.title}】`,
+                                { timeOut: 12000, closeButton: true }
+                            );
+                        }
+                    }
                 }
             }
+        });
+        
+        if (changed) {
+            set('goals', goals);
+            savePlotData();
+            
+            // Execute completed goals actions sequentially
+            completedGoalActions.forEach(actions => runActions(actions));
+            
+            document.dispatchEvent(new CustomEvent('plot:storeUpdated', { 
+                detail: { changed: { source: 'variable_evaluation' } } 
+            }));
         }
-    });
-    
-    if (changed) {
-        set('goals', goals);
-        savePlotData();
-        
-        // Execute completed goals actions sequentially
-        completedGoalActions.forEach(actions => runActions(actions));
-        
-        document.dispatchEvent(new CustomEvent('plot:storeUpdated', { 
-            detail: { changed: { source: 'variable_evaluation' } } 
-        }));
-    }
     } finally {
         // Always release the lock, even if an error is thrown mid-evaluation
         _isEvaluatingVariableGoals = false;
@@ -289,30 +314,61 @@ export function evaluateKeywordGoals(messageText) {
     const completedGoalActions = [];
     
     Object.values(goals).forEach(goal => {
-        if (goal.status === 'active' && goal.type === 'keyword' && goal.conditions?.keywords) {
-            const keywords = Array.isArray(goal.conditions.keywords)
-                ? goal.conditions.keywords
-                : (typeof goal.conditions.keywords === 'string' 
-                    ? goal.conditions.keywords.split(',').map(k => k.trim()) 
-                    : []);
-            
-            const isMatch = keywords.filter(Boolean).some(kw => messageText.includes(kw));
-            if (isMatch) {
-                goal.status = 'complete';
-                changed = true;
-                completedGoalActions.push(goal.actions || []);
-                console.log(`[Plot GoalEngine] Goal "${goal.id}" complete by Keyword match: ${keywords}`);
+        if (goal.status === 'active' && goal.type === 'keyword') {
+            // 1. Check completion keywords
+            if (goal.conditions?.keywords) {
+                const keywords = Array.isArray(goal.conditions.keywords)
+                    ? goal.conditions.keywords
+                    : (typeof goal.conditions.keywords === 'string' 
+                        ? goal.conditions.keywords.split(',').map(k => k.trim()) 
+                        : []);
                 
-                if (typeof toastr !== 'undefined') {
-                    const matchedKw = keywords.find(kw => messageText.includes(kw));
-                    const startIdx = Math.max(0, messageText.indexOf(matchedKw) - 15);
-                    const endIdx = Math.min(messageText.length, messageText.indexOf(matchedKw) + matchedKw.length + 15);
-                    const snippet = (startIdx > 0 ? '...' : '') + messageText.substring(startIdx, endIdx) + (endIdx < messageText.length ? '...' : '');
-                    toastr.success(
-                        `完成方式：关键词判定\n触发词："${matchedKw}"\n上下文："${snippet}"`,
-                        `🎉 剧情目标自动达成：【${goal.title}】`,
-                        { timeOut: 12000, closeButton: true }
-                    );
+                const matchedKw = keywords.filter(Boolean).find(kw => messageText.toLowerCase().includes(kw.toLowerCase()));
+                if (matchedKw) {
+                    goal.status = 'complete';
+                    changed = true;
+                    completedGoalActions.push(goal.actions || []);
+                    console.log(`[Plot GoalEngine] Goal "${goal.id}" complete by Keyword match: ${matchedKw}`);
+                    
+                    if (typeof toastr !== 'undefined') {
+                        const startIdx = Math.max(0, messageText.toLowerCase().indexOf(matchedKw.toLowerCase()) - 15);
+                        const endIdx = Math.min(messageText.length, messageText.toLowerCase().indexOf(matchedKw.toLowerCase()) + matchedKw.length + 15);
+                        const snippet = (startIdx > 0 ? '...' : '') + messageText.substring(startIdx, endIdx) + (endIdx < messageText.length ? '...' : '');
+                        toastr.success(
+                            `完成方式：关键词判定\n触发词："${matchedKw}"\n上下文："${snippet}"`,
+                            `🎉 剧情目标自动达成：【${goal.title}】`,
+                            { timeOut: 12000, closeButton: true }
+                        );
+                    }
+                    return; // Skip failure check if completed
+                }
+            }
+            
+            // 2. Check failure keywords
+            if (goal.conditions?.keywordsFail) {
+                const failKeywords = Array.isArray(goal.conditions.keywordsFail)
+                    ? goal.conditions.keywordsFail
+                    : (typeof goal.conditions.keywordsFail === 'string' 
+                        ? goal.conditions.keywordsFail.split(',').map(k => k.trim()) 
+                        : []);
+                
+                const matchedFailKw = failKeywords.filter(Boolean).find(kw => messageText.toLowerCase().includes(kw.toLowerCase()));
+                if (matchedFailKw) {
+                    goal.status = 'failed';
+                    changed = true;
+                    completedGoalActions.push(goal.actions || []);
+                    console.log(`[Plot GoalEngine] Goal "${goal.id}" failed by Keyword match: ${matchedFailKw}`);
+                    
+                    if (typeof toastr !== 'undefined') {
+                        const startIdx = Math.max(0, messageText.toLowerCase().indexOf(matchedFailKw.toLowerCase()) - 15);
+                        const endIdx = Math.min(messageText.length, messageText.toLowerCase().indexOf(matchedFailKw.toLowerCase()) + matchedFailKw.length + 15);
+                        const snippet = (startIdx > 0 ? '...' : '') + messageText.substring(startIdx, endIdx) + (endIdx < messageText.length ? '...' : '');
+                        toastr.error(
+                            `失败方式：关键词判定\n触发词："${matchedFailKw}"\n上下文："${snippet}"`,
+                            `❌ 剧情目标自动失败：【${goal.title}】`,
+                            { timeOut: 12000, closeButton: true }
+                        );
+                    }
                 }
             }
         }

@@ -54,6 +54,8 @@ async function renderDisplaySubTab(container) {
     if (!settings.panelSize)     settings.panelSize     = '80%';
     if (!settings.modules)       settings.modules       = {};
 
+    const DEFAULT_GLOBAL_INJECT_TEMPLATE = '[剧情状态]\n{{goals}}\n[/剧情状态]';
+
     const modules = [
         { id: 'variables', label: '变量/状态系统' },
         { id: 'goals',     label: '目标系统'       },
@@ -94,6 +96,7 @@ async function renderDisplaySubTab(container) {
 
     setupAccordion('plot-header-display', 'plot-body-display');
     setupAccordion('plot-header-modules', 'plot-body-modules');
+    setupAccordion('plot-header-global-inject', 'plot-body-global-inject');
 
     // Bind Position Select
     const posSelect = container.querySelector('#plot-panel-position');
@@ -118,6 +121,7 @@ async function renderDisplaySubTab(container) {
         e.stopPropagation();
         showPanel({
             position: settings.panelPosition,
+
             size: settings.panelSize
         });
     });
@@ -130,6 +134,22 @@ async function renderDisplaySubTab(container) {
             refreshTabVisibility();
         });
     });
+
+    // Bind Global Injection Template textarea
+    const globalTplArea = container.querySelector('#plot-global-injection-template');
+    if (globalTplArea) {
+        globalTplArea.value = settings.globalInjectionTemplate || DEFAULT_GLOBAL_INJECT_TEMPLATE;
+        globalTplArea.addEventListener('change', () => {
+            settings.globalInjectionTemplate = globalTplArea.value;
+            saveSettings();
+        });
+        // Reset button
+        container.querySelector('#plot-global-inject-reset')?.addEventListener('click', () => {
+            settings.globalInjectionTemplate = DEFAULT_GLOBAL_INJECT_TEMPLATE;
+            globalTplArea.value = DEFAULT_GLOBAL_INJECT_TEMPLATE;
+            saveSettings();
+        });
+    }
 }
 
 // ── Sub Tab 2: API Connection Config (stub) ─────────────────────────────────
@@ -498,20 +518,35 @@ async function renderReadingSubTab(container) {
         }
 
         listContainer.innerHTML = rules.map((rule, idx) => `
-            <div style="border:1px solid var(--SmartThemeBorderColor); border-radius:4px; padding:8px; display:flex; flex-direction:column; gap:6px; background:rgba(0,0,0,0.1);">
-                <div style="display:flex; justify-content:space-between; align-items:center;">
-                    <input type="text" class="plot-input plot-regex-name" data-idx="${idx}" value="${rule.name || ''}" placeholder="规则名称" style="padding:2px 6px; font-size:0.8em; flex:1; max-width:180px;">
-                    <div style="display:flex; gap:10px; align-items:center;">
-                        <label style="display:flex; align-items:center; gap:4px; font-size:0.8em; cursor:pointer;">
-                            <input type="checkbox" class="plot-regex-enable" data-idx="${idx}" ${!rule.disabled ? 'checked' : ''}>
+            <div style="border: 1px solid var(--SmartThemeBorderColor); border-radius: 6px; padding: 10px; display: flex; flex-direction: column; gap: 8px; background: var(--SmartThemeChatTintColor); box-shadow: 0 1px 3px rgba(0,0,0,0.05);">
+                <!-- Top Row: Name and Actions -->
+                <div style="display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: 8px; border-bottom: 1px dashed var(--SmartThemeBorderColor); padding-bottom: 6px;">
+                    <input type="text" class="plot-input plot-regex-name" data-idx="${idx}" value="${rule.name || ''}" placeholder="规则名称" style="padding: 2px 6px; font-size: 0.85em; flex: 1; min-width: 100px; max-width: 150px;">
+                    <div style="display: flex; gap: 8px; align-items: center; flex-wrap: wrap;">
+                        <select class="plot-select plot-regex-action" data-idx="${idx}" style="padding: 2px 6px; font-size: 0.8em; width: 85px; height: 24px; cursor: pointer;">
+                            <option value="replace" ${rule.action === 'replace' || !rule.action ? 'selected' : ''}>替换</option>
+                            <option value="delete" ${rule.action === 'delete' ? 'selected' : ''}>删除</option>
+                            <option value="keep" ${rule.action === 'keep' ? 'selected' : ''}>保留</option>
+                        </select>
+                        <label style="display: flex; align-items: center; gap: 4px; font-size: 0.8em; cursor: pointer; white-space: nowrap; user-select: none;">
+                            <input type="checkbox" class="plot-regex-enable" data-idx="${idx}" ${!rule.disabled ? 'checked' : ''} style="margin: 0;">
                             启用
                         </label>
-                        <button class="menu_button plot-btn plot-regex-del" data-idx="${idx}" style="padding:2px 6px; font-size:0.8em; color:var(--SmartThemeQuoteColor);"><i class="fa-solid fa-trash"></i></button>
+                        <button class="menu_button plot-btn plot-regex-del" data-idx="${idx}" style="padding: 2px 6px; font-size: 0.8em; color: var(--SmartThemeQuoteColor); display: flex; align-items: center; justify-content: center; height: 24px; border: 1px solid var(--SmartThemeBorderColor); border-radius: 4px;" title="删除此规则">
+                            <i class="fa-solid fa-trash"></i>
+                        </button>
                     </div>
                 </div>
-                <div style="display:flex; gap:6px;">
-                    <input type="text" class="plot-input plot-regex-find" data-idx="${idx}" value="${rule.find || ''}" placeholder="正则表达式" style="padding:2px 6px; font-size:0.85em; flex:1;">
-                    <input type="text" class="plot-input plot-regex-replace" data-idx="${idx}" value="${rule.replace || ''}" placeholder="替换为 (可空)" style="padding:2px 6px; font-size:0.85em; flex:1;">
+                <!-- Bottom Row: Regular Expressions inputs -->
+                <div style="display: flex; flex-direction: column; gap: 6px;">
+                    <div style="display: flex; flex-direction: column; gap: 2px;">
+                        <span style="font-size: 0.75em; opacity: 0.7;">匹配表达式 (Regex Find)</span>
+                        <input type="text" class="plot-input plot-regex-find" data-idx="${idx}" value="${rule.find || ''}" placeholder="正则表达式" style="padding: 4px 8px; font-size: 0.85em; width: 100%; font-family: monospace;">
+                    </div>
+                    <div style="display: flex; flex-direction: column; gap: 2px; ${rule.action === 'delete' || rule.action === 'keep' ? 'display: none;' : ''}">
+                        <span style="font-size: 0.75em; opacity: 0.7;">替换为 (Replace With)</span>
+                        <input type="text" class="plot-input plot-regex-replace" data-idx="${idx}" value="${rule.replace || ''}" placeholder="替换文本 (可空)" style="padding: 4px 8px; font-size: 0.85em; width: 100%;">
+                    </div>
                 </div>
             </div>
         `).join('');
@@ -521,6 +556,13 @@ async function renderReadingSubTab(container) {
             el.addEventListener('input', () => {
                 rules[Number(el.dataset.idx)].name = el.value.trim();
                 saveSettings();
+            });
+        });
+        listContainer.querySelectorAll('.plot-regex-action').forEach(el => {
+            el.addEventListener('change', () => {
+                rules[Number(el.dataset.idx)].action = el.value;
+                saveSettings();
+                renderRegexRulesList();
             });
         });
         listContainer.querySelectorAll('.plot-regex-find').forEach(el => {
@@ -556,6 +598,7 @@ async function renderReadingSubTab(container) {
             name: `规则 ${r.regexRules.length + 1}`,
             find: '',
             replace: '',
+            action: 'replace',
             disabled: false
         });
         saveSettings();

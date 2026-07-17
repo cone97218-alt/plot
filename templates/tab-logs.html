@@ -1,79 +1,23 @@
 <div style="display:flex; flex-direction:column; height:100%; overflow-y:auto; padding:15px; box-sizing:border-box; gap:10px;">
-    <!-- Sub Tab Bar -->
-    <div class="plot-sub-tab-bar" style="margin-bottom:12px; display:flex; gap:8px;">
-        <button class="plot-sub-tab active" data-logtab="preview">宏预览</button>
-        <button class="plot-sub-tab" data-logtab="logs">日志</button>
+    <!-- 日志 (合并真实调用与4个模块模拟调用) -->
+    <div style="display:flex; align-items:center; gap:8px; background:transparent; padding:8px 12px; border-radius:4px; border:1px solid var(--SmartThemeBorderColor); flex-wrap:wrap; justify-content:space-between; width:100%; box-sizing:border-box;">
+        <div style="display:flex; align-items:center; gap:6px; flex:1; min-width:180px;">
+            <span style="font-size:0.85em; color:var(--SmartThemeBodyColor); white-space:nowrap;">日志模块:</span>
+            <select id="plot-log-module-select" class="plot-select" style="width:100%; font-size:0.85em; height:28px; padding:0 4px;">
+                <option value="real">最新一次真实 API 调用</option>
+                <option value="variables">变量模块模拟调用</option>
+                <option value="goals">目标判定模拟调用</option>
+                <option value="goals_ai_gen">目标生成模拟调用</option>
+                <option value="storyline">故事线模块模拟调用</option>
+                <option value="backstage">幕后模块模拟调用</option>
+            </select>
+        </div>
+        <button id="plot-logs-refresh-logs-btn" class="menu_button plot-btn" style="padding:4px 10px; font-size:0.9em; flex-shrink:0;" title="刷新日志">
+            <i class="fa-solid fa-arrows-rotate"></i> 刷新
+        </button>
     </div>
 
-    <!-- Tab Content Pane 1: 宏预览 -->
-    <div id="plot-log-pane-preview" class="plot-log-pane" style="display:flex; flex-direction:column; gap:10px;">
-        <div style="display:flex; justify-content:space-between; align-items:center; background:rgba(0,0,0,0.1); padding:8px 12px; border-radius:4px; border: 1px solid var(--SmartThemeBorderColor);">
-            <span style="font-size:0.85em; color:var(--SmartThemeBodyColor);">实时生成各宏占位符的装配预览</span>
-            <button id="plot-logs-refresh-btn" class="menu_button plot-btn" style="padding:4px 8px; font-size:0.9em; flex-shrink:0;" title="刷新预览">
-                <i class="fa-solid fa-arrows-rotate"></i>
-            </button>
-        </div>
-
-        <div id="plot-logs-preview-area" style="display:flex; flex-direction:column; gap:10px;">
-            <div>
-                <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:4px;">
-                    <label class="plot-label" style="font-size:0.85em; font-weight:bold; margin-bottom:0;">{{char_desc}}</label>
-                    <i class="fa-solid fa-expand plot-ta-expand" data-ta="plot-preview-char-desc" data-title="角色卡设定 {{char_desc}}" style="cursor:pointer; color:var(--SmartThemeEmColor); font-size:0.85em;" title="全屏查看"></i>
-                </div>
-                <textarea id="plot-preview-char-desc" class="plot-input" rows="6" readonly style="width:100%; font-family:monospace; font-size:0.85em; background-color: var(--SmartThemeInputBgColor); color: var(--SmartThemeInputTextColor); border: 1px solid var(--SmartThemeInputBorderColor); padding:8px; border-radius:4px; box-sizing:border-box;"></textarea>
-            </div>
-            <div>
-                <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:4px;">
-                    <label class="plot-label" style="font-size:0.85em; font-weight:bold; margin-bottom:0;">{{user_desc}}</label>
-                    <i class="fa-solid fa-expand plot-ta-expand" data-ta="plot-preview-user-desc" data-title="用户 Persona {{user_desc}}" style="cursor:pointer; color:var(--SmartThemeEmColor); font-size:0.85em;" title="全屏查看"></i>
-                </div>
-                <textarea id="plot-preview-user-desc" class="plot-input" rows="4" readonly style="width:100%; font-family:monospace; font-size:0.85em; background-color: var(--SmartThemeInputBgColor); color: var(--SmartThemeInputTextColor); border: 1px solid var(--SmartThemeInputBorderColor); padding:8px; border-radius:4px; box-sizing:border-box;"></textarea>
-            </div>
-            <div>
-                <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:4px;">
-                    <label class="plot-label" style="font-size:0.85em; font-weight:bold; margin-bottom:0;">{{world_info}}</label>
-                    <i class="fa-solid fa-expand plot-ta-expand" data-ta="plot-preview-world-info" data-title="世界书条目 {{world_info}}" style="cursor:pointer; color:var(--SmartThemeEmColor); font-size:0.85em;" title="全屏查看"></i>
-                </div>
-                <textarea id="plot-preview-world-info" class="plot-input" rows="8" readonly style="width:100%; font-family:monospace; font-size:0.85em; background-color: var(--SmartThemeInputBgColor); color: var(--SmartThemeInputTextColor); border: 1px solid var(--SmartThemeInputBorderColor); padding:8px; border-radius:4px; box-sizing:border-box;"></textarea>
-            </div>
-            <div>
-                <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:4px;">
-                    <label class="plot-label" style="font-size:0.85em; font-weight:bold; margin-bottom:0;">{{chat_history}}</label>
-                    <i class="fa-solid fa-expand plot-ta-expand" data-ta="plot-preview-chat-history" data-title="清洗后的对话历史 {{chat_history}}" style="cursor:pointer; color:var(--SmartThemeEmColor); font-size:0.85em;" title="全屏查看"></i>
-                </div>
-                <textarea id="plot-preview-chat-history" class="plot-input" rows="12" readonly style="width:100%; font-family:monospace; font-size:0.85em; background-color: var(--SmartThemeInputBgColor); color: var(--SmartThemeInputTextColor); border: 1px solid var(--SmartThemeInputBorderColor); padding:8px; border-radius:4px; box-sizing:border-box;"></textarea>
-            </div>
-            <div>
-                <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:4px;">
-                    <label class="plot-label" style="font-size:0.85em; font-weight:bold; margin-bottom:0;">{{summary}}</label>
-                    <i class="fa-solid fa-expand plot-ta-expand" data-ta="plot-preview-summary" data-title="外部总结 {{summary}}" style="cursor:pointer; color:var(--SmartThemeEmColor); font-size:0.85em;" title="全屏查看"></i>
-                </div>
-                <textarea id="plot-preview-summary" class="plot-input" rows="4" readonly style="width:100%; font-family:monospace; font-size:0.85em; background-color: var(--SmartThemeInputBgColor); color: var(--SmartThemeInputTextColor); border: 1px solid var(--SmartThemeInputBorderColor); padding:8px; border-radius:4px; box-sizing:border-box;"></textarea>
-            </div>
-        </div>
-    </div>
-
-    <!-- Tab Content Pane 2: 日志 (合并真实调用与4个模块模拟调用) -->
-    <div id="plot-log-pane-logs" class="plot-log-pane" style="display:none; flex-direction:column; gap:10px;">
-        <div style="display:flex; align-items:center; gap:8px; background:rgba(0,0,0,0.1); padding:8px 12px; border-radius:4px; border:1px solid var(--SmartThemeBorderColor); flex-wrap:wrap; justify-content:space-between; width:100%; box-sizing:border-box;">
-            <div style="display:flex; align-items:center; gap:6px; flex:1; min-width:180px;">
-                <span style="font-size:0.85em; color:var(--SmartThemeBodyColor); white-space:nowrap;">日志模块:</span>
-                <select id="plot-log-module-select" class="plot-select" style="width:100%; font-size:0.85em; height:28px; padding:0 4px;">
-                    <option value="real">最新一次真实 API 调用</option>
-                    <option value="variables">变量模块模拟调用</option>
-                    <option value="goals">目标判定模拟调用</option>
-                    <option value="goals_ai_gen">目标生成模拟调用</option>
-                    <option value="storyline">故事线模块模拟调用</option>
-                    <option value="backstage">幕后模块模拟调用</option>
-                </select>
-            </div>
-            <button id="plot-logs-refresh-logs-btn" class="menu_button plot-btn" style="padding:4px 10px; font-size:0.9em; flex-shrink:0;" title="刷新日志">
-                <i class="fa-solid fa-arrows-rotate"></i> 刷新
-            </button>
-        </div>
-
-        <div id="plot-logs-logs-content" style="display:flex; flex-direction:column; gap:10px;">
-            <!-- Rendered dynamically by JS -->
-        </div>
+    <div id="plot-logs-logs-content" style="display:flex; flex-direction:column; gap:10px;">
+        <!-- Rendered dynamically by JS -->
     </div>
 </div>

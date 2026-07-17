@@ -48,6 +48,14 @@ export function registerHooks(eventSource, event_types) {
         }
     });
 
+    eventSource.on(event_types.CHAT_COMPLETION_PROMPT_READY, (chatContext) => {
+        try {
+            injectIntoPrompt(chatContext);
+        } catch (e) {
+            console.error('[Plot Hooks] Chat completion prompt injection failed:', e);
+        }
+    });
+
     // 3. Message received event: trigger parser scanning for AI replies
     eventSource.on(event_types.MESSAGE_RECEIVED, async (messageId) => {
         try {

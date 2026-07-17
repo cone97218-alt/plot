@@ -87,6 +87,28 @@
                 </div>
             </div>
 
+            <div style="display: flex; gap: 10px; width: 100%;">
+                <div class="plot-setting-group" style="flex: 1;">
+                    <label class="plot-label">任务状态</label>
+                    <select id="plot-drawer-goal-status" class="plot-select" style="width: 100%;">
+                        <option value="active">进行中</option>
+                        <option value="complete">已完成</option>
+                        <option value="failed">已失败</option>
+                        <option value="hidden">已隐藏</option>
+                    </select>
+                </div>
+                <div class="plot-setting-group" style="flex: 1;">
+                    <label class="plot-label">注入行模板覆盖 (此任务)</label>
+                    <input type="text" id="plot-drawer-goal-inject-line-template" class="plot-input" placeholder="留空使用全局行模板，例如: 【{{title}}】{{desc}}" style="width: 100%;">
+                </div>
+            </div>
+
+            <!-- Status history log box -->
+            <div class="plot-setting-group" id="plot-drawer-completion-detail-group" style="display: none; border: 1px solid var(--SmartThemeBorderColor); border-radius: 6px; padding: 10px; background: rgba(0,0,0,0.15); flex-direction: column; gap: 4px;">
+                <label class="plot-label" style="font-weight: bold; margin: 0;">状态变更记录</label>
+                <div id="plot-drawer-completion-detail-text" style="font-size: 0.85em; opacity: 0.85; white-space: pre-wrap; font-family: monospace;"></div>
+            </div>
+
             <!-- Custom Extra Fields -->
             <div class="plot-setting-group" id="plot-drawer-custom-fields-group" style="display: flex; flex-direction: column; gap: 6px; border: 1px solid var(--SmartThemeBorderColor); border-radius: 6px; padding: 10px; background: rgba(0,0,0,0.15); margin-bottom: 10px;">
                 <div style="display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid rgba(255,255,255,0.05); padding-bottom: 4px; margin-bottom: 4px;">
@@ -99,16 +121,28 @@
             </div>
 
             <!-- Conditional Trigger Area -->
-            <div id="plot-drawer-cond-variable-group" class="plot-setting-group" style="display: none; border: 1px solid var(--SmartThemeBorderColor); border-radius: 6px; padding: 10px; background: rgba(0,0,0,0.15);">
-                <label class="plot-label" style="color: var(--SmartThemeEmColor);"><i class="fa-solid fa-code"></i> 变量判定条件</label>
-                <input type="text" id="plot-drawer-cond-variable-expr" class="plot-input" placeholder="输入JS表达式，例如：relationship >= 60" style="width: 100%; font-family: monospace;">
+            <div id="plot-drawer-cond-variable-group" class="plot-setting-group" style="display: none; border: 1px solid var(--SmartThemeBorderColor); border-radius: 6px; padding: 10px; background: rgba(0,0,0,0.15); flex-direction: column; gap: 8px;">
+                <div>
+                    <label class="plot-label" style="color: var(--SmartThemeEmColor);"><i class="fa-solid fa-code"></i> 变量达成条件</label>
+                    <input type="text" id="plot-drawer-cond-variable-expr" class="plot-input" placeholder="输入JS表达式，例如：relationship >= 60" style="width: 100%; font-family: monospace;">
+                </div>
+                <div>
+                    <label class="plot-label" style="color: var(--SmartThemeQuoteColor);"><i class="fa-solid fa-circle-xmark"></i> 变量失败条件 (可选)</label>
+                    <input type="text" id="plot-drawer-cond-variable-expr-fail" class="plot-input" placeholder="输入JS表达式，例如：relationship < 20" style="width: 100%; font-family: monospace;">
+                </div>
                 <span class="plot-hint-text">可用的变量名请参考“变量”模块的注册名称。条件会在任何变量被更新时自动解算。</span>
             </div>
 
-            <div id="plot-drawer-cond-keyword-group" class="plot-setting-group" style="display: none; border: 1px solid var(--SmartThemeBorderColor); border-radius: 6px; padding: 10px; background: rgba(0,0,0,0.15);">
-                <label class="plot-label" style="color: var(--SmartThemeEmColor);"><i class="fa-solid fa-key"></i> 关键词判定（逗号分隔）</label>
-                <input type="text" id="plot-drawer-cond-keywords" class="plot-input" placeholder="输入关键词，例如：相信我, 结伴同行" style="width: 100%;">
-                <span class="plot-hint-text">当 AI 的单次回复中包含了上述任一关键词时，该任务将自动达成。</span>
+            <div id="plot-drawer-cond-keyword-group" class="plot-setting-group" style="display: none; border: 1px solid var(--SmartThemeBorderColor); border-radius: 6px; padding: 10px; background: rgba(0,0,0,0.15); flex-direction: column; gap: 8px;">
+                <div>
+                    <label class="plot-label" style="color: var(--SmartThemeEmColor);"><i class="fa-solid fa-key"></i> 关键词达成（逗号分隔）</label>
+                    <input type="text" id="plot-drawer-cond-keywords" class="plot-input" placeholder="输入关键词，例如：相信我, 结伴同行" style="width: 100%;">
+                </div>
+                <div>
+                    <label class="plot-label" style="color: var(--SmartThemeQuoteColor);"><i class="fa-solid fa-circle-xmark"></i> 关键词失败（逗号分隔，可选）</label>
+                    <input type="text" id="plot-drawer-cond-keywords-fail" class="plot-input" placeholder="输入关键词，例如：欺骗, 决裂" style="width: 100%;">
+                </div>
+                <span class="plot-hint-text">当 AI 的单次回复中包含了上述任一关键词时，该任务将自动达成或失败。</span>
             </div>
 
             <!-- Cascading Actions Manager -->

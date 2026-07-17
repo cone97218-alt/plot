@@ -50,4 +50,35 @@
             </div>
         </div>
     </div>
+
+    <!-- Global Injection Template Section -->
+    <div class="plot-accordion-section">
+        <div class="plot-accordion-header" id="plot-header-global-inject">
+            <span class="plot-accordion-title">全局注入模板</span>
+            <i class="fa-solid fa-chevron-down plot-accordion-icon"></i>
+        </div>
+        <div class="plot-accordion-body" id="plot-body-global-inject" style="display:none; padding: 12px 5px;">
+            <div class="plot-setting-group">
+                <div style="font-size:0.82em; color:var(--SmartThemeEmColor); margin-bottom:8px; line-height:1.5;">
+                    控制所有模块注入内容合并后的最终格式。使用占位符引用各模块：
+                    <br><code style="font-size:0.9em; background:var(--SmartThemeBlurTintColor); padding:1px 4px; border-radius:3px;">{{goals}}</code> — 目标模块（含块模板展开结果）
+                    <br><code style="font-size:0.9em; background:var(--SmartThemeBlurTintColor); padding:1px 4px; border-radius:3px;">{{variables}}</code> — 变量模块
+                    <br><code style="font-size:0.9em; background:var(--SmartThemeBlurTintColor); padding:1px 4px; border-radius:3px;">{{storylines}}</code> — 故事线模块
+                    <br><span style="font-size:0.9em;">关闭的模块对应的整行将被自动删除。</span>
+                </div>
+                <textarea
+                    id="plot-global-injection-template"
+                    class="plot-input"
+                    rows="6"
+                    style="width:100%; font-family:monospace; font-size:0.85em; resize:vertical;"
+                    placeholder="[剧情状态]&#10;{{goals}}&#10;[/剧情状态]"
+                ></textarea>
+                <div style="display:flex; justify-content:flex-end; margin-top:6px; gap:8px;">
+                    <button id="plot-global-inject-reset" class="menu_button plot-btn" style="padding:2px 10px; font-size:0.82em;">
+                        <i class="fa-solid fa-rotate-left"></i> 恢复默认
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
 </div>

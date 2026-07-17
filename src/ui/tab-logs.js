@@ -1,6 +1,6 @@
 /**
  * tab-logs.js - Logs & Prompt Tester UI
- * Allows previewing compiled prompts and inspecting background API call logs or simulated logs.
+ * Allows inspecting background API call logs or simulated logs.
  */
 
 import { buildContext } from '../core/context-reader.js';
@@ -87,62 +87,7 @@ export async function renderLogsTab(containerEl) {
         }
     });
 
-    // ── Local Sub Tab Switcher ──
-    const panes = containerEl.querySelectorAll('.plot-log-pane');
-    const tabs = containerEl.querySelectorAll('.plot-sub-tab');
-    
-    tabs.forEach(tab => {
-        tab.addEventListener('click', () => {
-            const target = tab.dataset.logtab;
-            
-            // Switch tabs styling
-            tabs.forEach(t => t.classList.toggle('active', t.dataset.logtab === target));
-            
-            // Switch panes visibility
-            panes.forEach(p => {
-                const paneId = `plot-log-pane-${target}`;
-                p.style.display = (p.id === paneId) ? 'flex' : 'none';
-            });
-
-            // Auto-trigger rendering on tab show
-            if (target === 'preview') {
-                loadLogsPreview();
-            } else if (target === 'logs') {
-                renderLogs();
-            }
-        });
-    });
-
-    // ── Sub Tab 1: Live Preview Logic (Macro Preview) ──
-    const loadLogsPreview = async () => {
-        const previewArea = containerEl.querySelector('#plot-logs-preview-area');
-        if (!previewArea) return;
-        
-        // Show loading state indicators
-        const textareas = previewArea.querySelectorAll('textarea');
-        textareas.forEach(ta => {
-            ta.value = '加载中...';
-        });
-
-        try {
-            const compiled = await buildContext();
-            // buildContext() returns: { char_desc, user_desc, world_info, chat_history, summary }
-            containerEl.querySelector('#plot-preview-char-desc').value   = compiled.char_desc    || '';
-            containerEl.querySelector('#plot-preview-user-desc').value   = compiled.user_desc    || '';
-            containerEl.querySelector('#plot-preview-world-info').value  = compiled.world_info   || '';
-            containerEl.querySelector('#plot-preview-chat-history').value = compiled.chat_history || '';
-            containerEl.querySelector('#plot-preview-summary').value     = compiled.summary      || '';
-        } catch (err) {
-            console.error('[Plot Logs] Error loading preview:', err);
-            textareas.forEach(ta => {
-                ta.value = `加载失败: ${err.message}`;
-            });
-        }
-    };
-
-    containerEl.querySelector('#plot-logs-refresh-btn').addEventListener('click', loadLogsPreview);
-
-    // ── Sub Tab 2: Unified Logs Rendering (Real and Simulation Logs) ──
+    // ── Unified Logs Rendering (Real and Simulation Logs) ──
     const renderLogs = async () => {
         const logContainer = containerEl.querySelector('#plot-logs-logs-content');
         if (!logContainer) return;
@@ -263,7 +208,6 @@ export async function renderLogsTab(containerEl) {
 
         try {
             const context = await buildContext();
-            // Determine connection connectionId and preset override
             let connId = 'default';
             let presetIdOverride = null;
             
@@ -291,7 +235,6 @@ export async function renderLogsTab(containerEl) {
             const promptParts = assemblePrompt(moduleId, context, {}, presetIdOverride);
             const moduleLabel = MODULE_LABELS[moduleId] || moduleId;
 
-            // We simulate the API call payload creation (including ST system/formatting steps)
             const actualMessages = await getRealPromptMessages(promptParts.messages, '', connId);
 
             const messagesHtml = actualMessages.map((m, idx) => {
@@ -347,6 +290,6 @@ export async function renderLogsTab(containerEl) {
     containerEl.querySelector('#plot-logs-refresh-logs-btn').addEventListener('click', renderLogs);
     containerEl.querySelector('#plot-log-module-select').addEventListener('change', renderLogs);
 
-    // Initial load: load Macro Preview first
-    loadLogsPreview();
+    // Initial load: render logs
+    renderLogs();
 }

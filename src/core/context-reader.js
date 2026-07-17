@@ -66,8 +66,21 @@ export function applyRegexFilter(text, rules = []) {
             } else {
                 regex = new RegExp(findStr, 'g');
             }
-            const replaceStr = rule.replace || '';
-            filteredText = filteredText.replace(regex, replaceStr);
+            
+            const action = rule.action || 'replace';
+            if (action === 'keep') {
+                const matches = filteredText.match(regex);
+                if (matches) {
+                    filteredText = matches.join('\n');
+                } else {
+                    filteredText = '';
+                }
+            } else if (action === 'delete') {
+                filteredText = filteredText.replace(regex, '');
+            } else {
+                const replaceStr = rule.replace || '';
+                filteredText = filteredText.replace(regex, replaceStr);
+            }
         } catch (err) {
             console.warn(`[Plot] Invalid regex rule pattern: "${rule.find}":`, err);
         }

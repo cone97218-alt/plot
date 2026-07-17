@@ -9,7 +9,7 @@ import { selected_world_info, loadWorldInfo } from '../../../../../world-info.js
 import { get, set, subscribe } from '../core/store.js';
 import { loadPlotData, savePlotData, getBtsDBKey } from '../core/storage.js';
 import { buildContext } from '../core/context-reader.js';
-import { resolvePlaceholders, assemblePrompt } from '../core/prompt-builder.js';
+import { resolvePlaceholders, assemblePrompt, getBlocks } from '../core/prompt-builder.js';
 import { callAI, listConnections, callAIStream } from '../core/api-client.js';
 import { renderBookChecklist, subscribeWIRefresh } from '../utils/dom.js';
 
@@ -230,6 +230,7 @@ function initThreadSelector() {
 
     const threadSelect = replaceEl('#plot-bts-thread-select');
     const addBtn      = replaceEl('#plot-bts-thread-add-btn');
+    const branchBtn   = replaceEl('#plot-bts-thread-branch-btn');
     const delBtn      = replaceEl('#plot-bts-thread-del-btn');
     if (!threadSelect || !addBtn || !delBtn) return;
 
@@ -251,15 +252,20 @@ function initThreadSelector() {
         renderDialogue();
     });
 
-    // ── Add thread ───────────────────────────────────────────────────────────
+    // ── Add thread (New Blank Dialogue) ──────────────────────────────────────
     addBtn.addEventListener('click', () => {
         showInputModal(
-            '新建对话分支',
-            '输入新分支的名称，例如：世界线A',
+            '新建空白对话',
+            '输入新对话的名称，例如：探讨新章节',
             async (name) => {
                 const newId = 'thread_' + Date.now();
                 mode.threads.push({ id: newId, name });
                 mode.activeThreadId = newId;
+
+                // Clear memory history and LoadedKey so it starts fresh & empty
+                const newKey = getBtsDBKey(activeModeId, newId);
+                set('backstageHistory', []);
+                set('backstageHistoryLoadedKey', newKey);
 
                 await savePlotData();
                 await loadPlotData();
@@ -268,6 +274,40 @@ function initThreadSelector() {
             }
         );
     });
+
+    // ── Branch thread (Copy Current History) ──────────────────────────────────
+    if (branchBtn) {
+        branchBtn.addEventListener('click', () => {
+            const currentHistory = get('backstageHistory') || [];
+            if (currentHistory.length === 0) {
+                alert('当前对话为空，无法分出平行分支！请直接使用“新建空白对话”功能。');
+                return;
+            }
+            showInputModal(
+                '分出平行对话 (复制当前历史)',
+                '输入新分支的名称，例如：探讨选择B',
+                async (name) => {
+                    const newId = 'thread_' + Date.now();
+
+                    // Duplicate current history into IndexedDB for the new thread key first
+                    const { savePlotValue } = await import('../core/indexeddb.js');
+                    const newKey = getBtsDBKey(activeModeId, newId);
+                    await savePlotValue(newKey, JSON.parse(JSON.stringify(currentHistory)));
+
+                    mode.threads.push({ id: newId, name });
+                    mode.activeThreadId = newId;
+
+                    // Set matching LoadedKey so savePlotData won't skip it next time
+                    set('backstageHistoryLoadedKey', newKey);
+
+                    await savePlotData();
+                    await loadPlotData();
+                    initThreadSelector();
+                    renderDialogue();
+                }
+            );
+        });
+    }
 
     // ── Delete thread ────────────────────────────────────────────────────────
     delBtn.addEventListener('click', async () => {
@@ -313,7 +353,25 @@ function initUnifiedConfigDrawer() {
         configDrawer.classList.add('show');
     });
 
+    const closeFullscreen = () => {
+        const wrapper = configDrawer.querySelector('.plot-bts-css-wrapper');
+        if (wrapper && wrapper.classList.contains('plot-bts-css-fullscreen-active')) {
+            wrapper.classList.remove('plot-bts-css-fullscreen-active');
+            const cssFullscreenBtn = configDrawer.querySelector('#plot-bts-theme-css-fullscreen');
+            if (cssFullscreenBtn) {
+                const span = cssFullscreenBtn.querySelector('span');
+                const icon = cssFullscreenBtn.querySelector('i');
+                if (span) span.textContent = '全屏';
+                if (icon) {
+                    icon.className = 'fa-solid fa-expand';
+                }
+                cssFullscreenBtn.title = '全屏编辑';
+            }
+        }
+    };
+
     closeBtn.addEventListener('click', () => {
+        closeFullscreen();
         configDrawer.classList.remove('show');
     });
 
@@ -349,6 +407,11 @@ function initUnifiedConfigDrawer() {
         const name = prompt('请输入新模式名称:');
         if (!name || !name.trim()) return;
 
+        const scopePrompt = prompt('请选择该模式的数据保存域（输入数字）：\n1. 绑定聊天会话 (chat - 默认)\n2. 绑定当前角色 (character)\n3. 全局共享 (global)\n(留空或输入其他默认选择 1)');
+        let scope = 'chat';
+        if (scopePrompt === '2') scope = 'character';
+        if (scopePrompt === '3') scope = 'global';
+
         const modes = extension_settings.plot?.backstageModes || [];
         const newId = 'mode_' + Date.now();
         const globalReading = extension_settings.plot?.reading || {};
@@ -358,6 +421,7 @@ function initUnifiedConfigDrawer() {
             name: name.trim(),
             presetId: 'default',
             connectionId: 'default',
+            storageScope: scope,
             useCustomReading: false,
             reading: {
                 historyLimit: globalReading.historyLimit ?? 20,
@@ -454,6 +518,30 @@ function initUnifiedConfigDrawer() {
     const themeNameInput = configDrawer.querySelector('#plot-bts-theme-name');
 
     const themeCssInput = configDrawer.querySelector('#plot-bts-theme-css');
+    const cssFullscreenBtn = configDrawer.querySelector('#plot-bts-theme-css-fullscreen');
+    if (cssFullscreenBtn) {
+        cssFullscreenBtn.addEventListener('click', () => {
+            const wrapper = configDrawer.querySelector('.plot-bts-css-wrapper');
+            if (wrapper) {
+                const isFullscreen = wrapper.classList.toggle('plot-bts-css-fullscreen-active');
+                const span = cssFullscreenBtn.querySelector('span');
+                const icon = cssFullscreenBtn.querySelector('i');
+                if (isFullscreen) {
+                    if (span) span.textContent = '退出全屏';
+                    if (icon) {
+                        icon.className = 'fa-solid fa-compress';
+                    }
+                    cssFullscreenBtn.title = '退出全屏编辑';
+                } else {
+                    if (span) span.textContent = '全屏';
+                    if (icon) {
+                        icon.className = 'fa-solid fa-expand';
+                    }
+                    cssFullscreenBtn.title = '全屏编辑';
+                }
+            }
+        });
+    }
     const themeFrameUrlInput = configDrawer.querySelector('#plot-bts-theme-frame-url');
 
     const customBotAvatarInput = configDrawer.querySelector('#plot-bts-custom-bot-avatar');
@@ -669,9 +757,10 @@ function initUnifiedConfigDrawer() {
         const mode = modes.find(m => m.id === activeId);
         if (!mode) return;
 
-        // Pane 1: Mode details
         rootEl.querySelector('#plot-bts-mode-name').value = mode.name;
-        rootEl.querySelector('#plot-bts-mode-storage-scope').value = mode.storageScope || 'chat';
+        const storageScopeSelect = rootEl.querySelector('#plot-bts-mode-storage-scope');
+        storageScopeSelect.value = mode.storageScope || 'chat';
+        storageScopeSelect.disabled = true;
         
         const presets = extension_settings.plot?.presets?.backstage || {};
         const presetSelect = rootEl.querySelector('#plot-bts-mode-preset');
@@ -722,13 +811,14 @@ function initUnifiedConfigDrawer() {
         const newAddRegexBtn = addRegexBtn.cloneNode(true);
         addRegexBtn.parentNode.replaceChild(newAddRegexBtn, addRegexBtn);
         newAddRegexBtn.addEventListener('click', () => {
-            showRegexEditorModal('专属规则', '', '', (name, find, replace) => {
+            showRegexEditorModal('专属规则', '', '', 'replace', (name, find, replace, action) => {
                 if (!mode.reading.regexRules) mode.reading.regexRules = [];
                 mode.reading.regexRules.push({
                     id: 'mode_rule_' + Date.now(),
                     name: name || '未命名规则',
                     find: find || '',
                     replace: replace || '',
+                    action: action || 'replace',
                     disabled: false
                 });
                 populateRegexRules(mode);
@@ -795,6 +885,7 @@ function initUnifiedConfigDrawer() {
 
     // 6. Unified Save Button
     saveBtn.addEventListener('click', async () => {
+        closeFullscreen();
         const activeId = get('backstageActiveModeId') || 'default';
         const modes = extension_settings.plot?.backstageModes || [];
         const mode = modes.find(m => m.id === activeId);
@@ -858,6 +949,13 @@ function populateRegexRules(mode) {
     const listContainer = rootEl.querySelector('#plot-bts-mode-regex-list');
     listContainer.innerHTML = '';
 
+    const getActionText = (rule) => {
+        const act = rule.action || 'replace';
+        if (act === 'delete') return '🗑️';
+        if (act === 'keep') return '📌';
+        return `&rarr; ${escapeHtml(rule.replace || '""')}`;
+    };
+
     // 1. Get global rules
     const globalRules = extension_settings.plot?.reading?.regexRules || [];
     const disabledGlobalIds = mode.reading?.disabledRegexIds || [];
@@ -869,17 +967,18 @@ function populateRegexRules(mode) {
     globalRules.forEach((rule) => {
         const item = document.createElement('div');
         item.className = 'plot-regex-rule-row';
-        item.style.cssText = 'display:flex; align-items:center; justify-content:space-between; padding:6px; border-bottom:1px solid rgba(255,255,255,0.05); font-size:0.85em;';
+        item.style.cssText = 'display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:6px; padding:6px; border-bottom:1px solid rgba(255,255,255,0.05); font-size:0.85em;';
         
         const isChecked = !disabledGlobalIds.includes(rule.id);
+        const actionLabel = rule.action === 'delete' ? '删除匹配' : (rule.action === 'keep' ? '仅保留匹配' : `替换: ${rule.replace || '""'}`);
         
         item.innerHTML = `
             <div style="display:flex; align-items:center; gap:8px;">
                 <input type="checkbox" class="plot-bts-regex-toggle" data-type="global" data-id="${rule.id}" ${isChecked ? 'checked' : ''}>
                 <span style="font-weight:600;">${escapeHtml(rule.name)} <span style="font-size:0.8em; opacity:0.6;">(全局)</span></span>
             </div>
-            <div style="font-size:0.8em; opacity:0.6; font-family:monospace; max-width:180px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;" title="匹配: ${escapeHtml(rule.find)} -> 替换: ${escapeHtml(rule.replace)}">
-                ${escapeHtml(rule.find)} &rarr; ${escapeHtml(rule.replace)}
+            <div style="font-size:0.8em; opacity:0.6; font-family:monospace; max-width:180px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;" title="匹配: ${escapeHtml(rule.find)} | 操作: ${actionLabel}">
+                ${escapeHtml(rule.find)} ${getActionText(rule)}
             </div>
         `;
         listContainer.appendChild(item);
@@ -889,18 +988,19 @@ function populateRegexRules(mode) {
     modeRules.forEach((rule, idx) => {
         const item = document.createElement('div');
         item.className = 'plot-regex-rule-row';
-        item.style.cssText = 'display:flex; align-items:center; justify-content:space-between; padding:6px; border-bottom:1px solid rgba(255,255,255,0.05); font-size:0.85em;';
+        item.style.cssText = 'display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:6px; padding:6px; border-bottom:1px solid rgba(255,255,255,0.05); font-size:0.85em;';
         
         const isChecked = !rule.disabled;
+        const actionLabel = rule.action === 'delete' ? '删除匹配' : (rule.action === 'keep' ? '仅保留匹配' : `替换: ${rule.replace || '""'}`);
         
         item.innerHTML = `
             <div style="display:flex; align-items:center; gap:8px;">
                 <input type="checkbox" class="plot-bts-regex-toggle" data-type="mode" data-idx="${idx}" ${isChecked ? 'checked' : ''}>
                 <span style="font-weight:600; color:var(--SmartThemeEmColor);">${escapeHtml(rule.name)} <span style="font-size:0.8em; opacity:0.6;">(模式专属)</span></span>
             </div>
-            <div style="display:flex; align-items:center; gap:8px;">
-                <div style="font-size:0.8em; opacity:0.6; font-family:monospace; max-width:130px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;" title="匹配: ${escapeHtml(rule.find)} -> 替换: ${escapeHtml(rule.replace)}">
-                    ${escapeHtml(rule.find)} &rarr; ${escapeHtml(rule.replace)}
+            <div style="display:flex; align-items:center; gap:8px; flex-wrap:wrap;">
+                <div style="font-size:0.8em; opacity:0.6; font-family:monospace; max-width:130px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;" title="匹配: ${escapeHtml(rule.find)} | 操作: ${actionLabel}">
+                    ${escapeHtml(rule.find)} ${getActionText(rule)}
                 </div>
                 <button class="plot-bts-action-btn plot-bts-regex-edit" data-idx="${idx}" title="编辑规则" style="padding:2px;"><i class="fa-solid fa-edit"></i></button>
                 <button class="plot-bts-action-btn plot-bts-regex-delete" data-idx="${idx}" title="删除规则" style="padding:2px; color:var(--SmartThemeQuoteColor);"><i class="fa-solid fa-trash"></i></button>
@@ -937,10 +1037,11 @@ function populateRegexRules(mode) {
             const rule = mode.reading.regexRules[ruleIdx];
             if (!rule) return;
 
-            showRegexEditorModal(rule.name, rule.find, rule.replace, (newName, newFind, newReplace) => {
+            showRegexEditorModal(rule.name, rule.find, rule.replace, rule.action || 'replace', (newName, newFind, newReplace, newAction) => {
                 rule.name = newName;
                 rule.find = newFind;
                 rule.replace = newReplace;
+                rule.action = newAction;
                 populateRegexRules(mode);
             });
         });
@@ -1032,81 +1133,103 @@ function showInputModal(title, placeholder, onConfirm) {
 }
 
 // ── Regex Editor Overlay Modal ───────────────────────────────────────────────
-function showRegexEditorModal(initialName, initialFind, initialReplace, onSave) {
+function showRegexEditorModal(initialName, initialFind, initialReplace, initialAction, onSave) {
     let overlay = document.getElementById('plot-bts-regex-modal-overlay');
-    if (!overlay) {
-        overlay = document.createElement('div');
-        overlay.id = 'plot-bts-regex-modal-overlay';
-        overlay.style.cssText = `
-            position: fixed;
-            top: 0;
-            left: 0;
-            width: 100vw;
-            height: 100vh;
-            background-color: rgba(var(--SmartThemeBlurTintColor-rgb), 0.95);
-            color: var(--SmartThemeBodyColor);
-            z-index: 999999;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            padding: 15px;
-            box-sizing: border-box;
-        `;
-        overlay.innerHTML = `
-            <div style="width: 320px; background: var(--SmartThemeChatTintColor); border: 1px solid var(--SmartThemeBorderColor); border-radius: 8px; padding: 15px; box-shadow: 0 4px 15px rgba(0,0,0,0.3); display: flex; flex-direction: column; gap: 10px;">
-                <div style="font-weight: bold; color: var(--SmartThemeEmColor); border-bottom: 1px solid var(--SmartThemeBorderColor); padding-bottom: 6px; margin-bottom: 4px; font-size:0.95em;">编辑专属正则裁剪规则</div>
-                <div class="plot-setting-group">
-                    <label class="plot-label" style="font-size: 0.8em;">规则名称</label>
-                    <input type="text" id="plot-bts-regex-m-name" class="plot-input" style="width:100%;">
-                </div>
-                <div class="plot-setting-group">
-                    <label class="plot-label" style="font-size: 0.8em;">匹配表达式 (Regex Find)</label>
-                    <input type="text" id="plot-bts-regex-m-find" class="plot-input" placeholder="/匹配内容/g" style="width:100%; font-family:monospace;">
-                </div>
-                <div class="plot-setting-group">
-                    <label class="plot-label" style="font-size: 0.8em;">替换为 (Replace With)</label>
-                    <input type="text" id="plot-bts-regex-m-replace" class="plot-input" placeholder="替换文本" style="width:100%;">
-                </div>
-                <div style="display: flex; justify-content: flex-end; gap: 8px; margin-top: 10px;">
-                    <button id="plot-bts-regex-m-cancel" class="plot-btn" style="font-size:0.85em; padding:4px 10px;">取消</button>
-                    <button id="plot-bts-regex-m-save" class="plot-btn" style="font-size:0.85em; padding:4px 10px; border-color: var(--SmartThemeEmColor); color: var(--SmartThemeEmColor);">保存</button>
-                </div>
-            </div>
-        `;
-        document.body.appendChild(overlay);
+    if (overlay) {
+        overlay.remove();
     }
 
-    overlay.querySelector('#plot-bts-regex-m-name').value = initialName || '';
-    overlay.querySelector('#plot-bts-regex-m-find').value = initialFind || '';
-    overlay.querySelector('#plot-bts-regex-m-replace').value = initialReplace || '';
+    overlay = document.createElement('div');
+    overlay.id = 'plot-bts-regex-modal-overlay';
+    overlay.style.cssText = `
+        position: fixed;
+        top: 0;
+        left: 0;
+        width: 100vw;
+        height: 100vh;
+        background-color: rgba(var(--SmartThemeBlurTintColor-rgb), 0.95);
+        color: var(--SmartThemeBodyColor);
+        z-index: 999999;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        padding: 15px;
+        box-sizing: border-box;
+    `;
+    overlay.innerHTML = `
+        <div style="width: 320px; background: var(--SmartThemeChatTintColor); border: 1px solid var(--SmartThemeBorderColor); border-radius: 8px; padding: 15px; box-shadow: 0 4px 15px rgba(0,0,0,0.3); display: flex; flex-direction: column; gap: 10px;">
+            <div style="font-weight: bold; color: var(--SmartThemeEmColor); border-bottom: 1px solid var(--SmartThemeBorderColor); padding-bottom: 6px; margin-bottom: 4px; font-size:0.95em;">编辑专属正则裁剪规则</div>
+            <div class="plot-setting-group">
+                <label class="plot-label" style="font-size: 0.8em;">规则名称</label>
+                <input type="text" id="plot-bts-regex-m-name" class="plot-input" style="width:100%;">
+            </div>
+            <div class="plot-setting-group">
+                <label class="plot-label" style="font-size: 0.8em;">匹配操作 (Action)</label>
+                <select id="plot-bts-regex-m-action" class="plot-select" style="width:100%; padding: 4px 8px; font-size: 0.9em; cursor:pointer;">
+                    <option value="replace">替换为自定义文本 (Replace)</option>
+                    <option value="delete">裁剪/删除匹配内容 (Delete)</option>
+                    <option value="keep">只保留匹配内容 (Keep Only)</option>
+                </select>
+            </div>
+            <div class="plot-setting-group">
+                <label class="plot-label" style="font-size: 0.8em;">匹配表达式 (Regex Find)</label>
+                <input type="text" id="plot-bts-regex-m-find" class="plot-input" placeholder="/匹配内容/g" style="width:100%; font-family:monospace;">
+            </div>
+            <div class="plot-setting-group" id="plot-bts-regex-replace-group">
+                <label class="plot-label" style="font-size: 0.8em;">替换为 (Replace With)</label>
+                <input type="text" id="plot-bts-regex-m-replace" class="plot-input" placeholder="替换文本" style="width:100%;">
+            </div>
+            <div style="display: flex; justify-content: flex-end; gap: 8px; margin-top: 10px;">
+                <button id="plot-bts-regex-m-cancel" class="plot-btn" style="font-size:0.85em; padding:4px 10px;">取消</button>
+                <button id="plot-bts-regex-m-save" class="plot-btn" style="font-size:0.85em; padding:4px 10px; border-color: var(--SmartThemeEmColor); color: var(--SmartThemeEmColor);">保存</button>
+            </div>
+        </div>
+    `;
+    document.body.appendChild(overlay);
+
+    const nameInput = overlay.querySelector('#plot-bts-regex-m-name');
+    const findInput = overlay.querySelector('#plot-bts-regex-m-find');
+    const replaceInput = overlay.querySelector('#plot-bts-regex-m-replace');
+    const actionSelect = overlay.querySelector('#plot-bts-regex-m-action');
+    const replaceGroup = overlay.querySelector('#plot-bts-regex-replace-group');
+
+    nameInput.value = initialName || '';
+    findInput.value = initialFind || '';
+    replaceInput.value = initialReplace || '';
+    actionSelect.value = initialAction || 'replace';
+
+    const updateReplaceVisibility = () => {
+        if (actionSelect.value === 'delete' || actionSelect.value === 'keep') {
+            replaceGroup.style.display = 'none';
+        } else {
+            replaceGroup.style.display = 'block';
+        }
+    };
+    actionSelect.addEventListener('change', updateReplaceVisibility);
+    updateReplaceVisibility();
+
     overlay.style.display = 'flex';
 
-    // Bind buttons
     const saveBtn = overlay.querySelector('#plot-bts-regex-m-save');
     const cancelBtn = overlay.querySelector('#plot-bts-regex-m-cancel');
 
-    // Remove old listeners to avoid multiple registrations
-    const newSaveBtn = saveBtn.cloneNode(true);
-    saveBtn.parentNode.replaceChild(newSaveBtn, saveBtn);
-    const newCancelBtn = cancelBtn.cloneNode(true);
-    cancelBtn.parentNode.replaceChild(newCancelBtn, cancelBtn);
-
-    newSaveBtn.addEventListener('click', () => {
-        const name = overlay.querySelector('#plot-bts-regex-m-name').value.trim();
-        const find = overlay.querySelector('#plot-bts-regex-m-find').value.trim();
-        const replace = overlay.querySelector('#plot-bts-regex-m-replace').value;
+    saveBtn.addEventListener('click', () => {
+        const name = nameInput.value.trim();
+        const find = findInput.value.trim();
+        const replace = replaceInput.value;
+        const action = actionSelect.value;
 
         if (!find) {
             alert('匹配表达式不能为空！');
             return;
         }
 
-        onSave(name, find, replace);
-        overlay.style.display = 'none';
+        onSave(name, find, replace, action);
+        overlay.remove();
     });
 
-    newCancelBtn.addEventListener('click', () => {
-        overlay.style.display = 'none';
+    cancelBtn.addEventListener('click', () => {
+        overlay.remove();
     });
 }
 
@@ -1308,6 +1431,36 @@ function updateRowDOM(row, msg, index, activeContent, swipes, swipeId, showAvata
             ${paginationHtml}
         </div>
     `;
+
+    addCodeCopyButtons(row);
+}
+
+// Add copy buttons to all pre code elements in the message row
+function addCodeCopyButtons(row) {
+    const preEls = row.querySelectorAll('.plot-bts-bubble-text pre');
+    preEls.forEach(pre => {
+        if (pre.querySelector('.plot-code-copy-btn')) return;
+
+        const btn = document.createElement('button');
+        btn.className = 'plot-code-copy-btn';
+        btn.setAttribute('title', '复制代码');
+        btn.innerHTML = '<i class="fa-solid fa-copy"></i>';
+
+        btn.addEventListener('click', () => {
+            const codeEl = pre.querySelector('code');
+            const codeText = codeEl ? codeEl.innerText : pre.innerText;
+            navigator.clipboard.writeText(codeText.trim()).then(() => {
+                btn.innerHTML = '<i class="fa-solid fa-check"></i>';
+                setTimeout(() => {
+                    btn.innerHTML = '<i class="fa-solid fa-copy"></i>';
+                }, 2000);
+            }).catch(err => {
+                console.error('[Plot] Failed to copy code: ', err);
+            });
+        });
+
+        pre.appendChild(btn);
+    });
 }
 
 // Bind bubble action clicks using event delegation on the container
@@ -1602,10 +1755,21 @@ async function executeAiGeneration(chatLog, existingAiMsgToSwipe = null, isSwipe
             }
         });
 
-        const messagesToSend = [
-            ...promptParts.messages.map(m => ({ role: m.role, content: m.content })),
-            ...promptPayload
-        ];
+        // Check if any active block in the preset contains the backstage chat history macro
+        const blocks = getBlocks('backstage', mode.presetId).filter(b => b.enabled);
+        const hasHistoryMacro = blocks.some(b => 
+            b.content && (b.content.includes('{{backstage_chat_history}}') || b.content.includes('{{bts_chat_history}}'))
+        );
+
+        let messagesToSend = [];
+        if (hasHistoryMacro) {
+            messagesToSend = promptParts.messages.map(m => ({ role: m.role, content: m.content }));
+        } else {
+            messagesToSend = [
+                ...promptParts.messages.map(m => ({ role: m.role, content: m.content })),
+                ...promptPayload
+            ];
+        }
 
         // 3. Make fetch request
         let reply = '';

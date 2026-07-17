@@ -125,7 +125,7 @@ export async function renderGoalsTab(containerEl) {
         const goals = { ...(get('goals') || {}) };
         let goal = goals[id];
         if (!goal) {
-            goal = { id, status: 'active', type: 'manual', conditions: { variable: '', variableFail: '', keywords: [], keywordsFail: [] }, actions: [] };
+            goal = { id, status: 'active', type: 'manual', conditions: { variable: '', variableFail: '', keywords: [], keywordsFail: [] }, actions: [], injectLineTemplate: '' };
             goals[id] = goal;
         }
         
@@ -162,6 +162,7 @@ export async function renderGoalsTab(containerEl) {
         goal.type = type;
         goal.conditions = conditions;
         goal.actions = actions;
+        goal.injectLineTemplate = rootEl.querySelector('#plot-drawer-goal-inject-line-template')?.value.trim() || '';
         
         // Compile custom/extra fields
         const extraFields = {};
@@ -174,7 +175,7 @@ export async function renderGoalsTab(containerEl) {
         });
         
         // Delete previous extra keys on edit
-        const oldExtraKeys = Object.keys(goal).filter(k => !['id', 'parentId', 'title', 'description', 'status', 'type', 'conditions', 'actions'].includes(k));
+        const oldExtraKeys = Object.keys(goal).filter(k => !['id', 'parentId', 'title', 'description', 'status', 'type', 'conditions', 'actions', 'injectLineTemplate'].includes(k));
         oldExtraKeys.forEach(k => delete goal[k]);
         
         // Merge extraFields
@@ -447,7 +448,7 @@ function buildGoalNodeDOM(goal, goalsMap, displayCfg = { showDesc: false, showSt
         titleEl.style.opacity = '0.35';
     }
     
-    const extraKeys = Object.keys(goal).filter(k => !['id', 'parentId', 'title', 'description', 'status', 'type', 'conditions', 'actions'].includes(k));
+    const extraKeys = Object.keys(goal).filter(k => !['id', 'parentId', 'title', 'description', 'status', 'type', 'conditions', 'actions', 'injectLineTemplate'].includes(k));
     const hasExtras = extraKeys.some(k => goal[k] !== undefined && goal[k] !== null && goal[k] !== '');
     
     if ((displayCfg.showDesc && goal.description) || hasExtras) {
@@ -537,6 +538,30 @@ function buildGoalNodeDOM(goal, goalsMap, displayCfg = { showDesc: false, showSt
     const rightSide = document.createElement('div');
     rightSide.style.cssText = 'display: flex; align-items: center; gap: 4px;';
     
+    // Pin to Main Chat Thumbtack Button
+    const pinnedIds = get('pinnedGoalIds') || [];
+    const isPinned = pinnedIds.includes(goal.id);
+    
+    const pinBtn = document.createElement('button');
+    pinBtn.className = 'menu_button plot-btn';
+    pinBtn.style.cssText = `padding: 2px 5px; font-size: 0.78em; ${isPinned ? 'color: var(--SmartThemeEmColor); border-color: var(--SmartThemeEmColor);' : 'opacity: 0.5;'}`;
+    pinBtn.innerHTML = '<i class="fa-solid fa-thumbtack"></i>';
+    pinBtn.title = isPinned ? '取消针定 (注入主聊天)' : '针定至主聊天 (持续附加)';
+    
+    pinBtn.addEventListener('click', async (e) => {
+        e.stopPropagation();
+        let currentPinned = [...(get('pinnedGoalIds') || [])];
+        if (currentPinned.includes(goal.id)) {
+            currentPinned = currentPinned.filter(id => id !== goal.id);
+        } else {
+            currentPinned.push(goal.id);
+        }
+        set('pinnedGoalIds', currentPinned);
+        await savePlotData();
+        renderGoalTreeUI();
+    });
+    rightSide.appendChild(pinBtn);
+
     const configBtn = document.createElement('button');
     configBtn.className = 'menu_button plot-btn';
     configBtn.style.cssText = 'padding: 2px 5px; font-size: 0.78em;';
@@ -852,6 +877,11 @@ function openConfigDrawer(goalId = null) {
     rootEl.querySelector('#plot-drawer-cond-keywords-fail').value = Array.isArray(goal.conditions?.keywordsFail) 
         ? goal.conditions.keywordsFail.join(', ') 
         : '';
+
+    const injectLineTemplateInput = rootEl.querySelector('#plot-drawer-goal-inject-line-template');
+    if (injectLineTemplateInput) {
+        injectLineTemplateInput.value = goal.injectLineTemplate || '';
+    }
         
     // 4. Action list loading
     const actionListContainer = rootEl.querySelector('#plot-drawer-action-list');

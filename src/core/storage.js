@@ -202,6 +202,13 @@ export async function loadPlotData() {
     plotData.goals = activeGoals;
     plotData.storylines = activeStorylines;
 
+    const pinKey = `pinned_goals_${chId}_${chatId}`;
+    let pinnedGoalIds = await getPlotValue(pinKey);
+    if (!Array.isArray(pinnedGoalIds)) {
+        pinnedGoalIds = [];
+    }
+    set('pinnedGoalIds', pinnedGoalIds);
+
     // 3. Load Backstage History from IndexedDB
     const dbKey = getBtsDBKey();
     let backstageHistory = await getPlotValue(dbKey);
@@ -264,6 +271,7 @@ export async function loadPlotData() {
     set('goals', plotData.goals);
     set('storylines', plotData.storylines);
     set('backstageHistory', plotData.backstageHistory);
+    set('backstageHistoryLoadedKey', dbKey);
 }
 
 export async function savePlotData() {
@@ -287,10 +295,12 @@ export async function savePlotData() {
     const varKey = `active_vars_${chId}_${chatId}`;
     const goalKey = `active_goals_${chId}_${chatId}`;
     const storylineKey = `active_storylines_${chId}_${chatId}`;
+    const pinKey = `pinned_goals_${chId}_${chatId}`;
 
     await savePlotValue(varKey, get('variables') || {});
     await savePlotValue(goalKey, get('goals') || {});
     await savePlotValue(storylineKey, get('storylines') || {});
+    await savePlotValue(pinKey, get('pinnedGoalIds') || []);
 
     // 3. Keep chatMetadata clean of actual history/data
     if (ctx.chatMetadata) {
@@ -306,8 +316,13 @@ export async function savePlotData() {
 
     // 4. Save backstageHistory for current active mode and active thread to IndexedDB
     const dbKey = getBtsDBKey();
-    const history = get('backstageHistory') || [];
-    await savePlotValue(dbKey, history);
+    const loadedKey = get('backstageHistoryLoadedKey');
+    if (loadedKey === dbKey) {
+        const history = get('backstageHistory') || [];
+        await savePlotValue(dbKey, history);
+    } else {
+        console.log(`[Plot Storage] Skipping backstage history save to key "${dbKey}" because loadedKey is "${loadedKey}"`);
+    }
 }
 
 export function exportPlotData() {
