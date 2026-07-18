@@ -134,6 +134,31 @@ export function registerMacros() {
             description: 'Inline active goals list',
             handler: () => getInjectionMacros().plot_goals,
         });
+        macros.register(`${MACRO_PREFIX}_goals_active`, {
+            category: cat,
+            description: 'Active goals tree list',
+            handler: () => getInjectionMacros().plot_goals_active,
+        });
+        macros.register(`${MACRO_PREFIX}_goals_complete`, {
+            category: cat,
+            description: 'Completed goals tree list',
+            handler: () => getInjectionMacros().plot_goals_complete,
+        });
+        macros.register(`${MACRO_PREFIX}_goals_failed`, {
+            category: cat,
+            description: 'Failed goals tree list',
+            handler: () => getInjectionMacros().plot_goals_failed,
+        });
+        macros.register(`${MACRO_PREFIX}_goals_hidden`, {
+            category: cat,
+            description: 'Hidden goals tree list',
+            handler: () => getInjectionMacros().plot_goals_hidden,
+        });
+        macros.register(`${MACRO_PREFIX}_goals_all`, {
+            category: cat,
+            description: 'All goals tree list',
+            handler: () => getInjectionMacros().plot_goals_all,
+        });
         macros.register(`${MACRO_PREFIX}_storyline`, {
             category: cat,
             description: 'Inline storyline progress',
@@ -144,12 +169,22 @@ export function registerMacros() {
         MacrosParser.registerMacro(`${MACRO_PREFIX}_state`,     () => getInjectionMacros().plot_state, 'Full structured state block');
         MacrosParser.registerMacro(`${MACRO_PREFIX}_variables`, () => getInjectionMacros().plot_variables, 'Inline variable list');
         MacrosParser.registerMacro(`${MACRO_PREFIX}_goals`,     () => getInjectionMacros().plot_goals, 'Inline active goals list');
+        MacrosParser.registerMacro(`${MACRO_PREFIX}_goals_active`,  () => getInjectionMacros().plot_goals_active, 'Active goals tree list');
+        MacrosParser.registerMacro(`${MACRO_PREFIX}_goals_complete`,() => getInjectionMacros().plot_goals_complete, 'Completed goals tree list');
+        MacrosParser.registerMacro(`${MACRO_PREFIX}_goals_failed`,  () => getInjectionMacros().plot_goals_failed, 'Failed goals tree list');
+        MacrosParser.registerMacro(`${MACRO_PREFIX}_goals_hidden`,  () => getInjectionMacros().plot_goals_hidden, 'Hidden goals tree list');
+        MacrosParser.registerMacro(`${MACRO_PREFIX}_goals_all`,     () => getInjectionMacros().plot_goals_all, 'All goals tree list');
         MacrosParser.registerMacro(`${MACRO_PREFIX}_storyline`, () => getInjectionMacros().plot_storyline, 'Inline storyline progress');
         console.log('[Plot Macros] Registered static macros via MacrosParser API.');
     } else if (typeof ctx.registerMacro === 'function') {
         ctx.registerMacro(`${MACRO_PREFIX}_state`,     () => getInjectionMacros().plot_state);
         ctx.registerMacro(`${MACRO_PREFIX}_variables`, () => getInjectionMacros().plot_variables);
         ctx.registerMacro(`${MACRO_PREFIX}_goals`,     () => getInjectionMacros().plot_goals);
+        ctx.registerMacro(`${MACRO_PREFIX}_goals_active`,   () => getInjectionMacros().plot_goals_active);
+        ctx.registerMacro(`${MACRO_PREFIX}_goals_complete`, () => getInjectionMacros().plot_goals_complete);
+        ctx.registerMacro(`${MACRO_PREFIX}_goals_failed`,   () => getInjectionMacros().plot_goals_failed);
+        ctx.registerMacro(`${MACRO_PREFIX}_goals_hidden`,   () => getInjectionMacros().plot_goals_hidden);
+        ctx.registerMacro(`${MACRO_PREFIX}_goals_all`,      () => getInjectionMacros().plot_goals_all);
         ctx.registerMacro(`${MACRO_PREFIX}_storyline`, () => getInjectionMacros().plot_storyline);
         console.log('[Plot Macros] Registered static macros via getContext().registerMacro.');
     }
@@ -180,6 +215,11 @@ export function registerMacros() {
                 .replace(/\{\{plot_state\}\}/gi,     m.plot_state)
                 .replace(/\{\{plot_variables\}\}/gi,  m.plot_variables)
                 .replace(/\{\{plot_goals\}\}/gi,      m.plot_goals)
+                .replace(/\{\{plot_goals_active\}\}/gi,  m.plot_goals_active)
+                .replace(/\{\{plot_goals_complete\}\}/gi,m.plot_goals_complete)
+                .replace(/\{\{plot_goals_failed\}\}/gi,  m.plot_goals_failed)
+                .replace(/\{\{plot_goals_hidden\}\}/gi,  m.plot_goals_hidden)
+                .replace(/\{\{plot_goals_all\}\}/gi,     m.plot_goals_all)
                 .replace(/\{\{plot_storyline\}\}/gi,  m.plot_storyline);
 
             return originalSubstituteParams(result, ...args);

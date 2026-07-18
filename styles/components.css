@@ -743,3 +743,277 @@
     height: 100% !important;
     font-size: 1.1em !important;
 }
+
+/* ── Goals Tree UI Redesign (Minimalist & Clean) ───────────────────────── */
+.plot-goals-wrapper {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    padding: 4px 0;
+}
+
+.plot-goal-node {
+    position: relative;
+    margin-bottom: 4px;
+}
+
+.plot-goal-node.is-child {
+    margin-left: 10px;
+    padding-left: 8px;
+}
+
+/* Vertical guide line for hierarchy */
+.plot-goal-node.is-child::before {
+    content: '';
+    position: absolute;
+    left: 0;
+    top: -4px;
+    bottom: -4px;
+    width: 1px;
+    background: var(--SmartThemeBorderColor);
+    opacity: 0.4;
+}
+
+.plot-goal-node.is-child:last-child::before {
+    bottom: auto;
+    height: 18px; /* Stop the line at the last child node */
+}
+
+/* Horizontal line pointing to the node */
+.plot-goal-node.is-child::after {
+    content: '';
+    position: absolute;
+    left: 0;
+    top: 14px;
+    width: 5px;
+    height: 1px;
+    background: var(--SmartThemeBorderColor);
+    opacity: 0.4;
+}
+
+/* Minimalist Goal Card (Actually a borderless container) */
+.plot-goal-card {
+    display: flex;
+    flex-direction: column;
+    border-radius: 6px;
+    background: transparent;
+    border: 1px solid transparent;
+    transition: all 0.2s ease;
+    overflow: hidden;
+}
+
+/* Subtle background highlight on hover of the card */
+.plot-goal-card:hover {
+    background: rgba(var(--SmartThemeChatTintColor-rgb, 0, 0, 0), 0.15);
+    border-color: rgba(var(--SmartThemeBorderColor-rgb, 128, 128, 128), 0.2);
+}
+
+/* Card Header Row */
+.plot-goal-header-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 6px 8px;
+    gap: 10px;
+}
+
+/* Left side of the header row */
+.plot-goal-header-left {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex: 1;
+    min-width: 0;
+}
+
+/* Title text */
+.plot-goal-title {
+    font-size: 0.92em;
+    font-weight: 500;
+    color: var(--SmartThemeBodyColor);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    transition: all 0.2s;
+    user-select: none;
+}
+
+/* Status specific title colors & decoration */
+.plot-goal-card.is-complete .plot-goal-title {
+    text-decoration: line-through;
+    opacity: 0.45;
+}
+
+.plot-goal-card.is-failed .plot-goal-title {
+    color: var(--SmartThemeQuoteColor);
+    opacity: 0.75;
+}
+
+.plot-goal-card.is-hidden .plot-goal-title {
+    opacity: 0.35;
+}
+
+/* Custom checkbox / check circle icon */
+.plot-goal-status-icon {
+    font-size: 1.1em;
+    color: var(--SmartThemeEmColor);
+    opacity: 0.75;
+    transition: all 0.15s ease;
+    cursor: pointer;
+    flex-shrink: 0;
+}
+
+.plot-goal-status-icon:hover {
+    opacity: 1;
+    transform: scale(1.08);
+}
+
+.plot-goal-card.is-complete .plot-goal-status-icon {
+    color: #4caf50;
+    opacity: 0.85;
+}
+
+/* Muted fold icon */
+.plot-goal-fold-icon {
+    cursor: pointer;
+    font-size: 0.8em;
+    color: var(--SmartThemeBodyColor);
+    opacity: 0.6;
+    width: 12px;
+    text-align: center;
+    transition: all 0.2s;
+}
+
+.plot-goal-fold-icon:hover {
+    opacity: 1;
+    color: var(--SmartThemeEmColor);
+}
+
+.plot-goal-details {
+    padding: 0 8px 6px 22px; /* Offset to align under checkbox status icon */
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    border-top: none;
+    background: transparent;
+}
+
+.plot-goal-desc {
+    font-size: 0.8em;
+    line-height: 1.4;
+    opacity: 0.6;
+    word-break: break-word;
+    white-space: pre-wrap;
+    max-height: 150px;
+    overflow-y: auto;
+}
+
+/* Custom badge container */
+.plot-goal-badges {
+    display: flex;
+    gap: 4px;
+    flex-wrap: wrap;
+    align-items: center;
+    margin-top: 2px;
+}
+
+/* Minimalist pill badges */
+.plot-goal-badge {
+    font-size: 0.7em;
+    padding: 1px 6px;
+    border-radius: 4px;
+    background: var(--SmartThemeChatTintColor);
+    border: 1px solid var(--SmartThemeBorderColor);
+    color: var(--SmartThemeBodyColor);
+    font-weight: normal;
+    display: inline-flex;
+    align-items: center;
+    gap: 3px;
+    opacity: 0.75;
+}
+
+/* Type badge */
+.plot-goal-type-badge {
+    font-size: 0.68em;
+    font-weight: 500;
+    padding: 0 4px;
+    border-radius: 3px;
+    background: transparent;
+    color: var(--SmartThemeEmColor);
+    border: 1px solid var(--SmartThemeEmColor);
+    opacity: 0.85;
+    cursor: help;
+    flex-shrink: 0;
+}
+
+/* Status badge styles */
+.plot-goal-status-badge {
+    font-size: 0.68em;
+    font-weight: 500;
+    padding: 0 5px;
+    border-radius: 3px;
+    border: 1px solid transparent;
+    flex-shrink: 0;
+}
+
+.plot-goal-status-badge.active {
+    color: var(--SmartThemeBodyColor);
+    border-color: var(--SmartThemeBorderColor);
+    opacity: 0.8;
+}
+
+.plot-goal-status-badge.complete {
+    color: var(--SmartThemeUnderlineColor);
+    border-color: var(--SmartThemeUnderlineColor);
+}
+
+.plot-goal-status-badge.failed {
+    color: var(--SmartThemeQuoteColor);
+    border-color: var(--SmartThemeQuoteColor);
+}
+
+.plot-goal-status-badge.hidden {
+    color: var(--SmartThemeBodyColor);
+    border-color: var(--SmartThemeBorderColor);
+    opacity: 0.45;
+}
+
+/* Action button stylings */
+.plot-goal-action-btn {
+    border: none;
+    background: transparent;
+    color: var(--SmartThemeBodyColor);
+    opacity: 0.45;
+    cursor: pointer;
+    font-size: 0.82em;
+    padding: 3px;
+    border-radius: 3px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    transition: all 0.2s ease;
+}
+
+.plot-goal-action-btn i {
+    color: inherit;
+    opacity: inherit;
+    transition: all 0.2s ease;
+}
+
+.plot-goal-action-btn:hover i {
+    color: var(--SmartThemeEmColor) !important;
+}
+
+.plot-goal-action-btn.btn-delete:hover i {
+    color: var(--SmartThemeQuoteColor) !important;
+}
+
+.plot-goal-action-btn.is-pinned {
+    opacity: 0.95;
+}
+
+.plot-goal-action-btn.is-pinned i {
+    color: var(--SmartThemeEmColor) !important;
+}
+
+

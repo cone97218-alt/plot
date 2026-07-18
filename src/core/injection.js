@@ -13,7 +13,7 @@
 import { get } from './store.js';
 import { extension_settings } from '../../../../../extensions.js';
 import { setExtensionPrompt } from '../../../../../../script.js';
-import { serializeVariablesInline, serializeGoalsInline, serializeStorylinesInline, serializeComplexInline, formatComplexValue, getActiveVariableSuffix } from './serializers.js';
+import { serializeVariablesInline, serializeGoalsInline, serializeStorylinesInline, serializeComplexInline, formatComplexValue, getActiveVariableSuffix, serializeGoals } from './serializers.js';
 import { getActivePromptInjections } from './variable-engine.js';
 
 const MODULE_NAME = 'plot';
@@ -75,6 +75,7 @@ export function resolveGoalMacros(template, defaultLineTemplate) {
     const activeGoals    = goalList.filter(g => (g.status === 'active' || !g.status) && !pinnedIds.includes(g.id));
     const completeGoals  = goalList.filter(g => g.status === 'complete');
     const failedGoals    = goalList.filter(g => g.status === 'failed');
+    const hiddenGoals    = goalList.filter(g => g.status === 'hidden');
     const allGoals       = goalList;
     // Pinned active goals — exposed as {{plot_goals_pinned}}, NOT auto-appended
     const pinnedGoals    = goalList.filter(g => (g.status === 'active' || !g.status) && pinnedIds.includes(g.id));
@@ -83,6 +84,7 @@ export function resolveGoalMacros(template, defaultLineTemplate) {
         .replace(/\{\{plot_goals_active\}\}/g,  formatList(activeGoals))
         .replace(/\{\{plot_goals_complete\}\}/g, formatList(completeGoals))
         .replace(/\{\{plot_goals_failed\}\}/g,   formatList(failedGoals))
+        .replace(/\{\{plot_goals_hidden\}\}/g,   formatList(hiddenGoals))
         .replace(/\{\{plot_goals_all\}\}/g,      formatList(allGoals))
         .replace(/\{\{plot_goals_pinned\}\}/g,   formatList(pinnedGoals));
         
@@ -270,10 +272,15 @@ export function getInjectionMacros() {
     }
 
     return {
-        plot_state:     buildInjectionText().trim(),
-        plot_variables: resolveVariablesBlock(s),
-        plot_goals:     goalsStr,
-        plot_storyline: serializeStorylinesInline()
+        plot_state:          buildInjectionText().trim(),
+        plot_variables:      resolveVariablesBlock(s),
+        plot_goals:          goalsStr,
+        plot_storyline:      serializeStorylinesInline(),
+        plot_goals_active:   serializeGoals('active'),
+        plot_goals_complete: serializeGoals('complete'),
+        plot_goals_failed:   serializeGoals('failed'),
+        plot_goals_hidden:   serializeGoals('hidden'),
+        plot_goals_all:      serializeGoals('all')
     };
 }
 

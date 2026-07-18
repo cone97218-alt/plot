@@ -176,29 +176,32 @@ export function serializeGoalsInline() {
  * Serialise non-completed goals to a bullet-list string for AI prompts.
  * @returns {string}
  */
-function hasActiveDescendants(goalId, goalsMap) {
+function hasDescendantsWithStatus(goalId, goalsMap, statusFilter) {
     const goal = goalsMap[goalId];
     if (!goal) return false;
-    if (goal.status === 'active' || !goal.status) return true;
+    
+    const goalStatus = goal.status || 'active';
+    if (statusFilter === 'all') return true;
+    if (goalStatus === statusFilter) return true;
     
     const children = Object.values(goalsMap).filter(g => g.parentId === goalId);
-    return children.some(child => hasActiveDescendants(child.id, goalsMap));
+    return children.some(child => hasDescendantsWithStatus(child.id, goalsMap, statusFilter));
 }
 
-function renderGoalTree(goalId, goalsMap, depth = 0) {
+function renderGoalTree(goalId, goalsMap, statusFilter = 'active', depth = 0) {
     const goal = goalsMap[goalId];
     if (!goal) return '';
     
-    const isActive = goal.status === 'active' || !goal.status;
-    const hasActiveChild = Object.values(goalsMap)
+    const goalStatus = goal.status || 'active';
+    const matchesFilter = statusFilter === 'all' || goalStatus === statusFilter;
+    const hasMatchingDescendant = Object.values(goalsMap)
         .filter(g => g.parentId === goalId)
-        .some(child => hasActiveDescendants(child.id, goalsMap));
+        .some(child => hasDescendantsWithStatus(child.id, goalsMap, statusFilter));
         
-    if (!isActive && !hasActiveChild) return '';
+    if (!matchesFilter && !hasMatchingDescendant) return '';
     
     const indent = '  '.repeat(depth);
-    const statusStr = goal.status || 'active';
-    const statusLabel = statusStr === 'active' ? '进行中' : (statusStr === 'complete' ? '已完成' : '已失败');
+    const statusLabel = goalStatus === 'active' ? '进行中' : (goalStatus === 'complete' ? '已完成' : (goalStatus === 'failed' ? '已失败' : '已隐藏'));
     const line = `${indent}- [${goal.id}] ${goal.title} (状态: ${statusLabel})`;
     
     const children = Object.values(goalsMap)
@@ -206,7 +209,7 @@ function renderGoalTree(goalId, goalsMap, depth = 0) {
         .sort((a, b) => a.title.localeCompare(b.title));
         
     const childLines = children
-        .map(child => renderGoalTree(child.id, goalsMap, depth + 1))
+        .map(child => renderGoalTree(child.id, goalsMap, statusFilter, depth + 1))
         .filter(Boolean);
         
     if (childLines.length > 0) {
@@ -215,7 +218,7 @@ function renderGoalTree(goalId, goalsMap, depth = 0) {
     return line;
 }
 
-export function serializeGoals() {
+export function serializeGoals(statusFilter = 'active') {
     const goals = get('goals') || {};
     if (Object.keys(goals).length === 0) return '（无目标）';
     
@@ -223,10 +226,13 @@ export function serializeGoals() {
     const roots = Object.values(goals).filter(g => !g.parentId || !goals[g.parentId]);
     
     const treeLines = roots
-        .map(root => renderGoalTree(root.id, goals))
+        .map(root => renderGoalTree(root.id, goals, statusFilter))
         .filter(Boolean);
         
-    if (treeLines.length === 0) return '（无活动目标）';
+    if (treeLines.length === 0) {
+        const labelMap = { active: '活动', complete: '已完成', failed: '已失败', hidden: '已隐藏', all: '' };
+        return `（无${labelMap[statusFilter] || ''}目标）`;
+    }
     return treeLines.join('\n');
 }
 

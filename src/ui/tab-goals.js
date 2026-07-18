@@ -175,7 +175,8 @@ export async function renderGoalsTab(containerEl) {
         });
         
         // Delete previous extra keys on edit
-        const oldExtraKeys = Object.keys(goal).filter(k => !['id', 'parentId', 'title', 'description', 'status', 'type', 'conditions', 'actions', 'injectLineTemplate'].includes(k));
+        const CORE_GOAL_KEYS = ['id', 'parentId', 'title', 'name', 'description', 'status', 'type', 'conditions', 'actions', 'injectLineTemplate', 'completedDetail'];
+        const oldExtraKeys = Object.keys(goal).filter(k => !CORE_GOAL_KEYS.includes(k));
         oldExtraKeys.forEach(k => delete goal[k]);
         
         // Merge extraFields
@@ -286,7 +287,26 @@ export async function renderGoalsTab(containerEl) {
             
             const list = extractJsonArray(responseText);
             if (Array.isArray(list)) {
-                tempGeneratedGoals = list.filter(item => item.title);
+                tempGeneratedGoals = list.map(item => {
+                    // Map name to title if name is provided but title is missing
+                    if (item.name && !item.title) {
+                        item.title = item.name;
+                    }
+                    // Auto-infer type if conditions are present but type is manual/missing
+                    if (!item.type || item.type === 'manual') {
+                        if (item.conditions) {
+                            if (item.conditions.variable || item.conditions.variableFail) {
+                                item.type = 'variable';
+                            } else if (
+                                (Array.isArray(item.conditions.keywords) && item.conditions.keywords.length > 0) ||
+                                (Array.isArray(item.conditions.keywordsFail) && item.conditions.keywordsFail.length > 0)
+                            ) {
+                                item.type = 'keyword';
+                            }
+                        }
+                    }
+                    return item;
+                }).filter(item => item.title);
                 if (tempGeneratedGoals.length === 0) {
                     throw new Error('AI 未能生成任何有效目标，请修改提示词或引导词重试');
                 }
@@ -383,23 +403,22 @@ function buildGoalNodeDOM(goal, goalsMap, displayCfg = { showDesc: false, showSt
     const node = document.createElement('div');
     node.className = 'plot-goal-node';
     node.dataset.id = goal.id;
-    if (isRoot) {
-        node.style.cssText = 'margin-left: 0; border-left: none; padding-left: 0; margin-bottom: 6px;';
-    } else {
-        node.style.cssText = 'margin-left: 16px; border-left: 1px dashed var(--SmartThemeBorderColor); padding-left: 8px; margin-bottom: 6px;';
+    if (!isRoot) {
+        node.classList.add('is-child');
     }
     
+    const card = document.createElement('div');
+    card.className = 'plot-goal-card';
+    if (goal.status === 'complete') card.classList.add('is-complete');
+    if (goal.status === 'failed') card.classList.add('is-failed');
+    if (goal.status === 'hidden') card.classList.add('is-hidden');
+    
     const row = document.createElement('div');
-    row.className = 'plot-goal-row';
-    row.style.cssText = 'display: flex; align-items: center; justify-content: space-between; padding: 4px 8px; border-radius: 4px; background: rgba(255,255,255,0.02); gap: 8px;';
+    row.className = 'plot-goal-header-row';
     
-    // Hover highlight effect
-    row.addEventListener('mouseenter', () => { row.style.background = 'rgba(255,255,255,0.06)'; });
-    row.addEventListener('mouseleave', () => { row.style.background = 'rgba(255,255,255,0.02)'; });
-    
-    // Left section: folding + checkbox + title + badges
+    // Left section: folding + status icon + title
     const leftSide = document.createElement('div');
-    leftSide.style.cssText = 'display: flex; align-items: center; gap: 8px; flex: 1; min-width: 0;';
+    leftSide.className = 'plot-goal-header-left';
     
     const getNum = (id) => {
         const match = id.match(/g_(\d+)/) || id.match(/goal_(\d+)/);
@@ -418,91 +437,32 @@ function buildGoalNodeDOM(goal, goalsMap, displayCfg = { showDesc: false, showSt
     const foldIcon = document.createElement('i');
     if (hasChildren) {
         foldIcon.className = 'fa-solid fa-chevron-down plot-goal-fold-icon';
-        foldIcon.style.cssText = 'cursor: pointer; font-size: 0.8em; color: var(--SmartThemeEmColor); width: 12px; text-align: center;';
     } else {
         foldIcon.className = 'fa-regular fa-circle-dot';
         foldIcon.style.cssText = 'font-size: 0.65em; opacity: 0.4; width: 12px; text-align: center;';
     }
     leftSide.appendChild(foldIcon);
     
-    // Checkbox
-    const chk = document.createElement('input');
-    chk.type = 'checkbox';
-    chk.style.cssText = 'cursor: pointer; margin: 0; transform: scale(1.05);';
-    chk.checked = goal.status === 'complete';
+    // Status Checkbox Icon (using FontAwesome instead of standard checkbox inputs to prevent custom theme anomalies)
+    const chk = document.createElement('i');
+    chk.className = goal.status === 'complete' ? 'fa-solid fa-circle-check plot-goal-status-icon' : 'fa-regular fa-circle plot-goal-status-icon';
     leftSide.appendChild(chk);
     
     // Title
     const titleEl = document.createElement('span');
+    titleEl.className = 'plot-goal-title';
     titleEl.textContent = goal.title;
     titleEl.title = goal.description || '无任务描述';
-    titleEl.style.cssText = 'font-size: 0.88em; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; flex: 1;';
-    
-    if (goal.status === 'complete') {
-        titleEl.style.textDecoration = 'line-through';
-        titleEl.style.opacity = '0.5';
-    } else if (goal.status === 'failed') {
-        titleEl.style.color = 'var(--SmartThemeQuoteColor)';
-        titleEl.style.opacity = '0.75';
-    } else if (goal.status === 'hidden') {
-        titleEl.style.opacity = '0.35';
-    }
-    
-    const extraKeys = Object.keys(goal).filter(k => !['id', 'parentId', 'title', 'description', 'status', 'type', 'conditions', 'actions', 'injectLineTemplate'].includes(k));
-    const hasExtras = extraKeys.some(k => goal[k] !== undefined && goal[k] !== null && goal[k] !== '');
-    
-    if ((displayCfg.showDesc && goal.description) || hasExtras) {
-        const textContainer = document.createElement('div');
-        textContainer.style.cssText = 'display: flex; flex-direction: column; flex: 1; min-width: 0;';
-        
-        titleEl.style.flex = 'initial';
-        textContainer.appendChild(titleEl);
-        
-        if (displayCfg.showDesc && goal.description) {
-            const descEl = document.createElement('div');
-            descEl.textContent = goal.description;
-            descEl.style.cssText = 'font-size: 0.72em; opacity: 0.55; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; margin-top: 1px;';
-            textContainer.appendChild(descEl);
-        }
-        
-        if (hasExtras) {
-            const extraContainer = document.createElement('div');
-            extraContainer.style.cssText = 'display: flex; gap: 6px; flex-wrap: wrap; margin-top: 2px;';
-            extraKeys.forEach(k => {
-                const val = goal[k];
-                if (val !== undefined && val !== null && val !== '') {
-                    const badge = document.createElement('span');
-                    
-                    // Fetch label and color from customBadges
-                    const globalBadges = getContext().extensionSettings?.plot?.customBadges || {};
-                    const configEntry = globalBadges[k];
-                    
-                    const labelMap = { reward: '奖励', rewards: '奖励', awards: '奖励', innerVoice: '心声', exp: '经验', clue: '线索' };
-                    const label = configEntry?.label || labelMap[k] || k;
-                    
-                    let badgeColor = configEntry?.color || 'var(--SmartThemeEmColor)';
-                    badge.style.cssText = `font-size: 0.65em; padding: 1px 4px; border-radius: 3px; background: rgba(0,0,0,0.15); border: 1px solid ${badgeColor}; color: ${badgeColor}; font-weight: bold;`;
-                    
-                    badge.textContent = `${label}: ${val}`;
-                    extraContainer.appendChild(badge);
-                }
-            });
-            textContainer.appendChild(extraContainer);
-        }
-        
-        leftSide.appendChild(textContainer);
-    } else {
-        leftSide.appendChild(titleEl);
-    }
+    leftSide.appendChild(titleEl);
     
     // Type Badge
     if (displayCfg.showType) {
         const typeLabelMap = { manual: '手', variable: '参', keyword: '词', ai: '智' };
         const typeTitleMap = { manual: '手动完成任务', variable: '条件表达式判定', keyword: '关键词匹配判定', ai: 'AI后台判定' };
         const typeBadge = document.createElement('span');
+        typeBadge.className = 'plot-goal-type-badge';
         typeBadge.textContent = typeLabelMap[goal.type] || '手';
         typeBadge.title = typeTitleMap[goal.type] || '手动任务';
-        typeBadge.style.cssText = 'font-size: 0.62em; font-weight: bold; padding: 1px 3px; border-radius: 3px; background: rgba(0,0,0,0.25); color: var(--SmartThemeBodyColor); border: 1px solid var(--SmartThemeBorderColor); cursor: help;';
         leftSide.appendChild(typeBadge);
     }
     
@@ -512,23 +472,12 @@ function buildGoalNodeDOM(goal, goalsMap, displayCfg = { showDesc: false, showSt
         statusBadge = document.createElement('span');
         const statusStr = goal.status || 'active';
         let statusText = '进行中';
-        let statusBg = 'rgba(80,120,220,0.12)';
-        let statusColor = 'var(--SmartThemeBodyColor)';
-        if (statusStr === 'complete') {
-            statusText = '已完成';
-            statusBg = 'rgba(76,175,80,0.12)';
-            statusColor = '#4caf50';
-        } else if (statusStr === 'failed') {
-            statusText = '已失败';
-            statusBg = 'rgba(244,67,54,0.12)';
-            statusColor = 'var(--SmartThemeQuoteColor)';
-        } else if (statusStr === 'hidden') {
-            statusText = '已隐藏';
-            statusBg = 'rgba(128,128,128,0.12)';
-            statusColor = '#888888';
-        }
+        if (statusStr === 'complete') statusText = '已完成';
+        else if (statusStr === 'failed') statusText = '已失败';
+        else if (statusStr === 'hidden') statusText = '已隐藏';
+        
+        statusBadge.className = `plot-goal-status-badge ${statusStr}`;
         statusBadge.textContent = statusText;
-        statusBadge.style.cssText = `font-size: 0.65em; font-weight: bold; padding: 1px 4px; border-radius: 3px; background: ${statusBg}; color: ${statusColor}; border: 1px solid transparent;`;
         leftSide.appendChild(statusBadge);
     }
     
@@ -536,48 +485,111 @@ function buildGoalNodeDOM(goal, goalsMap, displayCfg = { showDesc: false, showSt
     
     // Right section: actions
     const rightSide = document.createElement('div');
-    rightSide.style.cssText = 'display: flex; align-items: center; gap: 4px;';
+    rightSide.style.cssText = 'display: flex; align-items: center; gap: 6px;';
     
     // Pin to Main Chat Thumbtack Button
     const pinnedIds = get('pinnedGoalIds') || [];
     const isPinned = pinnedIds.includes(goal.id);
     
     const pinBtn = document.createElement('button');
-    pinBtn.className = 'menu_button plot-btn';
-    pinBtn.style.cssText = `padding: 2px 5px; font-size: 0.78em; ${isPinned ? 'color: var(--SmartThemeEmColor); border-color: var(--SmartThemeEmColor);' : 'opacity: 0.5;'}`;
+    pinBtn.className = 'plot-goal-action-btn';
+    if (isPinned) pinBtn.classList.add('is-pinned');
     pinBtn.innerHTML = '<i class="fa-solid fa-thumbtack"></i>';
     pinBtn.title = isPinned ? '取消针定 (注入主聊天)' : '针定至主聊天 (持续附加)';
     
     pinBtn.addEventListener('click', async (e) => {
         e.stopPropagation();
         let currentPinned = [...(get('pinnedGoalIds') || [])];
-        if (currentPinned.includes(goal.id)) {
-            currentPinned = currentPinned.filter(id => id !== goal.id);
-        } else {
+        const willPin = !currentPinned.includes(goal.id);
+        if (willPin) {
             currentPinned.push(goal.id);
+            pinBtn.classList.add('is-pinned');
+            pinBtn.title = '取消针定 (注入主聊天)';
+        } else {
+            currentPinned = currentPinned.filter(id => id !== goal.id);
+            pinBtn.classList.remove('is-pinned');
+            pinBtn.title = '针定至主聊天 (持续附加)';
         }
         set('pinnedGoalIds', currentPinned);
         await savePlotData();
-        renderGoalTreeUI();
     });
     rightSide.appendChild(pinBtn);
 
     const configBtn = document.createElement('button');
-    configBtn.className = 'menu_button plot-btn';
-    configBtn.style.cssText = 'padding: 2px 5px; font-size: 0.78em;';
+    configBtn.className = 'plot-goal-action-btn';
     configBtn.innerHTML = '<i class="fa-solid fa-gear"></i>';
     configBtn.title = '配置详情';
     rightSide.appendChild(configBtn);
     
     const deleteBtn = document.createElement('button');
-    deleteBtn.className = 'menu_button plot-btn';
-    deleteBtn.style.cssText = 'padding: 2px 5px; font-size: 0.78em; color: var(--SmartThemeQuoteColor);';
+    deleteBtn.className = 'plot-goal-action-btn btn-delete';
     deleteBtn.innerHTML = '<i class="fa-solid fa-trash"></i>';
     deleteBtn.title = '删除目标';
     rightSide.appendChild(deleteBtn);
     
     row.appendChild(rightSide);
-    node.appendChild(row);
+    card.appendChild(row);
+    
+    // Details panel (Description and Custom attributes)
+    const CORE_GOAL_KEYS = ['id', 'parentId', 'title', 'name', 'description', 'status', 'type', 'conditions', 'actions', 'injectLineTemplate', 'completedDetail'];
+    const extraKeys = Object.keys(goal).filter(k => !CORE_GOAL_KEYS.includes(k));
+    const hasExtras = extraKeys.some(k => goal[k] !== undefined && goal[k] !== null && goal[k] !== '');
+    const hasDesc = displayCfg.showDesc && goal.description;
+    
+    if (hasDesc || hasExtras) {
+        const details = document.createElement('div');
+        details.className = 'plot-goal-details';
+        
+        if (hasDesc) {
+            const descEl = document.createElement('div');
+            descEl.className = 'plot-goal-desc';
+            descEl.textContent = goal.description;
+            details.appendChild(descEl);
+        }
+        
+        if (hasExtras) {
+            const badgesContainer = document.createElement('div');
+            badgesContainer.className = 'plot-goal-badges';
+            extraKeys.forEach(k => {
+                const val = goal[k];
+                if (val !== undefined && val !== null && val !== '') {
+                    const badge = document.createElement('span');
+                    badge.className = 'plot-goal-badge';
+                    
+                    const globalBadges = getContext().extensionSettings?.plot?.customBadges || {};
+                    const configEntry = globalBadges[k];
+                    const labelMap = { reward: '奖励', rewards: '奖励', awards: '奖励', innerVoice: '心声', exp: '经验', clue: '线索' };
+                    const label = configEntry?.label || labelMap[k] || k;
+                    
+                    let badgeColor = configEntry?.color || 'var(--SmartThemeEmColor)';
+                    let badgeBg = configEntry?.bgColor || 'var(--SmartThemeChatTintColor)';
+                    let badgeBorder = configEntry?.borderColor || badgeColor;
+                    
+                    badge.style.color = badgeColor;
+                    badge.style.backgroundColor = badgeBg;
+                    badge.style.borderColor = badgeBorder;
+                    
+                    const cleanVal = String(val).trim();
+                    badge.textContent = `${label}: ${cleanVal}`;
+                    if (badge.textContent.length > 24) {
+                        badge.style.width = '100%';
+                        badge.style.boxSizing = 'border-box';
+                        badge.style.display = 'flex';
+                        badge.style.whiteSpace = 'normal';
+                    } else {
+                        badge.style.width = 'auto';
+                        badge.style.display = 'inline-flex';
+                        badge.style.whiteSpace = 'nowrap';
+                    }
+                    badgesContainer.appendChild(badge);
+                }
+            });
+            details.appendChild(badgesContainer);
+        }
+        card.appendChild(details);
+    }
+    
+    node.appendChild(card);
     
     // Children list container
     const childrenContainer = document.createElement('div');
@@ -604,26 +616,25 @@ function buildGoalNodeDOM(goal, goalsMap, displayCfg = { showDesc: false, showSt
         return ch.some(c => (c.status === 'active' || !c.status) || hasActiveDescendants(c.id));
     };
 
-    // Bind status toggle
-    chk.addEventListener('change', () => {
-        const nextStatus = chk.checked ? 'complete' : 'active';
+    // Bind status toggle click on icon
+    chk.addEventListener('click', () => {
+        const nextStatus = goal.status === 'complete' ? 'active' : 'complete';
         
         // Zero-latency instant visual feedback in DOM
         if (nextStatus === 'complete') {
-            titleEl.style.textDecoration = 'line-through';
-            titleEl.style.opacity = '0.5';
+            card.classList.add('is-complete');
+            card.classList.remove('is-failed', 'is-hidden');
+            chk.className = 'fa-solid fa-circle-check plot-goal-status-icon';
             if (statusBadge) {
                 statusBadge.textContent = '已完成';
-                statusBadge.style.background = 'rgba(76,175,80,0.12)';
-                statusBadge.style.color = '#4caf50';
+                statusBadge.className = 'plot-goal-status-badge complete';
             }
         } else {
-            titleEl.style.textDecoration = 'none';
-            titleEl.style.opacity = '1';
+            card.classList.remove('is-complete', 'is-failed', 'is-hidden');
+            chk.className = 'fa-regular fa-circle plot-goal-status-icon';
             if (statusBadge) {
                 statusBadge.textContent = '进行中';
-                statusBadge.style.background = 'rgba(80,120,220,0.12)';
-                statusBadge.style.color = 'var(--SmartThemeBodyColor)';
+                statusBadge.className = 'plot-goal-status-badge active';
             }
         }
         
@@ -785,143 +796,153 @@ function refreshParentSelects() {
 // ── Configuration Drawer Open & Action Rows Manager ──────────────────────────
 
 function openConfigDrawer(goalId = null) {
-    const goals = get('goals') || {};
-    
-    const isNew = !goalId;
-    const tempId = isNew ? 'goal_' + Date.now() : goalId;
-    const goal = isNew ? {
-        id: tempId,
-        title: '',
-        description: '',
-        parentId: '',
-        type: 'manual',
-        conditions: { variable: '', keywords: [] },
-        actions: []
-    } : goals[goalId];
-    
-    if (!goal) return;
-    
-    const configDrawer = rootEl.querySelector('#plot-goal-config-drawer');
-    
-    // 1. Populate standard values
-    rootEl.querySelector('#plot-drawer-goal-id').value = goal.id;
-    rootEl.querySelector('#plot-drawer-goal-title').value = goal.title || '';
-    rootEl.querySelector('#plot-drawer-goal-desc').value = goal.description || '';
-    
-    // Status history log box
-    const detailGroup = rootEl.querySelector('#plot-drawer-completion-detail-group');
-    const detailText = rootEl.querySelector('#plot-drawer-completion-detail-text');
-    if (detailGroup && detailText) {
-        if (goal.completedDetail) {
-            detailGroup.style.display = 'flex';
-            detailText.textContent = goal.completedDetail.replace(/\\n/g, '\n');
-            if (goal.status === 'complete') {
-                detailGroup.style.background = 'rgba(76,175,80,0.12)';
-                detailGroup.style.borderColor = 'rgba(76,175,80,0.3)';
-                detailGroup.querySelector('label').style.color = '#4caf50';
-            } else if (goal.status === 'failed') {
-                detailGroup.style.background = 'rgba(244,67,54,0.12)';
-                detailGroup.style.borderColor = 'rgba(244,67,54,0.3)';
-                detailGroup.querySelector('label').style.color = 'var(--SmartThemeQuoteColor)';
+    try {
+        const goals = get('goals') || {};
+        
+        const isNew = !goalId;
+        const tempId = isNew ? 'goal_' + Date.now() : goalId;
+        const goal = isNew ? {
+            id: tempId,
+            title: '',
+            description: '',
+            parentId: '',
+            type: 'manual',
+            conditions: { variable: '', keywords: [] },
+            actions: []
+        } : goals[goalId];
+        
+        if (!goal) return;
+        
+        const configDrawer = rootEl.querySelector('#plot-goal-config-drawer');
+        
+        // 1. Populate standard values
+        rootEl.querySelector('#plot-drawer-goal-id').value = goal.id;
+        rootEl.querySelector('#plot-drawer-goal-title').value = goal.title || '';
+        rootEl.querySelector('#plot-drawer-goal-desc').value = goal.description || '';
+        
+        // Status history log box
+        const detailGroup = rootEl.querySelector('#plot-drawer-completion-detail-group');
+        const detailText = rootEl.querySelector('#plot-drawer-completion-detail-text');
+        if (detailGroup && detailText) {
+            if (goal.completedDetail) {
+                detailGroup.style.display = 'flex';
+                detailText.textContent = goal.completedDetail.replace(/\\n/g, '\n');
+                detailGroup.style.background = 'rgba(var(--SmartThemeBlurTintColor-rgb, 0,0,0), 0.3)';
+                if (goal.status === 'complete') {
+                    detailGroup.style.borderColor = 'var(--SmartThemeUnderlineColor)';
+                    detailGroup.querySelector('label').style.color = 'var(--SmartThemeUnderlineColor)';
+                } else if (goal.status === 'failed') {
+                    detailGroup.style.borderColor = 'var(--SmartThemeQuoteColor)';
+                    detailGroup.querySelector('label').style.color = 'var(--SmartThemeQuoteColor)';
+                } else {
+                    detailGroup.style.borderColor = 'var(--SmartThemeBorderColor)';
+                    detailGroup.querySelector('label').style.color = 'var(--SmartThemeEmColor)';
+                }
             } else {
-                detailGroup.style.background = 'rgba(0,0,0,0.15)';
-                detailGroup.style.borderColor = 'var(--SmartThemeBorderColor)';
-                detailGroup.querySelector('label').style.color = 'var(--SmartThemeEmColor)';
+                detailGroup.style.display = 'none';
             }
-        } else {
-            detailGroup.style.display = 'none';
         }
-    }
-    
-    // Status dropdown
-    const statusSelect = rootEl.querySelector('#plot-drawer-goal-status');
-    if (statusSelect) {
-        statusSelect.value = goal.status || 'active';
-    }
-    
-    // 2. Populate parent dropdown (exclude current goal and its sub-goals to prevent cycles)
-    const cycleFreeGoals = Object.values(goals).filter(g => {
-        if (isNew) return true;
-        if (g.id === goalId) return false;
         
-        const isDescendant = (childId, parentId) => {
-            const child = goals[childId];
-            if (!child || !child.parentId) return false;
-            if (child.parentId === parentId) return true;
-            return isDescendant(child.parentId, parentId);
-        };
+        // Status dropdown
+        const statusSelect = rootEl.querySelector('#plot-drawer-goal-status');
+        if (statusSelect) {
+            statusSelect.value = goal.status || 'active';
+        }
         
-        return !isDescendant(g.id, goalId);
-    });
-    
-    const parentSelect = rootEl.querySelector('#plot-drawer-goal-parent');
-    parentSelect.innerHTML = `
-        <option value="">-- 无父目标 --</option>
-        ${cycleFreeGoals.map(g => `<option value="${g.id}">${escapeHtml(g.title)}</option>`).join('')}
-    `;
-    parentSelect.value = goal.parentId || '';
-    
-    // 3. Type Selection & Condition triggers
-    const typeSelect = rootEl.querySelector('#plot-drawer-goal-type');
-    typeSelect.value = goal.type || 'manual';
-    
-    rootEl.querySelector('#plot-drawer-cond-variable-group').style.display = goal.type === 'variable' ? 'flex' : 'none';
-    rootEl.querySelector('#plot-drawer-cond-keyword-group').style.display = goal.type === 'keyword' ? 'flex' : 'none';
-    
-    // Fill values
-    rootEl.querySelector('#plot-drawer-cond-variable-expr').value = goal.conditions?.variable || '';
-    rootEl.querySelector('#plot-drawer-cond-variable-expr-fail').value = goal.conditions?.variableFail || '';
-    rootEl.querySelector('#plot-drawer-cond-keywords').value = Array.isArray(goal.conditions?.keywords) 
-        ? goal.conditions.keywords.join(', ') 
-        : '';
-    rootEl.querySelector('#plot-drawer-cond-keywords-fail').value = Array.isArray(goal.conditions?.keywordsFail) 
-        ? goal.conditions.keywordsFail.join(', ') 
-        : '';
-
-    const injectLineTemplateInput = rootEl.querySelector('#plot-drawer-goal-inject-line-template');
-    if (injectLineTemplateInput) {
-        injectLineTemplateInput.value = goal.injectLineTemplate || '';
-    }
-        
-    // 4. Action list loading
-    const actionListContainer = rootEl.querySelector('#plot-drawer-action-list');
-    actionListContainer.innerHTML = '';
-    actionRowCompilers = [];
-    
-    const actions = goal.actions || [];
-    actions.forEach(action => {
-        const rowObj = createActionRowDOM(action, tempId);
-        actionListContainer.appendChild(rowObj.dom);
-        actionRowCompilers.push(rowObj.getActionConfig);
-    });
-    
-    // Render custom fields
-    const customFieldsList = rootEl.querySelector('#plot-drawer-custom-fields-list');
-    if (customFieldsList) {
-        customFieldsList.innerHTML = '';
-        const renderCustomFieldRow = (key = '', val = '') => {
-            const row = document.createElement('div');
-            row.className = 'plot-custom-field-row';
-            row.style.cssText = 'display: flex; gap: 6px; align-items: center; width: 100%;';
-            row.innerHTML = `
-                <input type="text" class="plot-input field-key" placeholder="属性名(如 reward)" value="${escapeHtml(key)}" style="flex: 1; font-size: 0.85em; padding: 4px 6px;">
-                <input type="text" class="plot-input field-val" placeholder="属性值" value="${escapeHtml(val)}" style="flex: 2; font-size: 0.85em; padding: 4px 6px;">
-                <i class="fa-solid fa-trash-can field-delete" style="cursor: pointer; color: var(--SmartThemeQuoteColor); font-size: 0.9em; padding: 0 4px;" title="删除属性"></i>
-            `;
-            row.querySelector('.field-delete').addEventListener('click', () => row.remove());
-            customFieldsList.appendChild(row);
-        };
-        const extraKeys = Object.keys(goal).filter(k => !['id', 'parentId', 'title', 'description', 'status', 'type', 'conditions', 'actions'].includes(k));
-        extraKeys.forEach(k => {
-            renderCustomFieldRow(k, goal[k]);
+        // 2. Populate parent dropdown (exclude current goal and its sub-goals to prevent cycles)
+        const cycleFreeGoals = Object.values(goals).filter(g => {
+            if (isNew) return true;
+            if (g.id === goalId) return false;
+            
+            // Cycle-safe descendant checker using Set
+            const isDescendant = (childId, parentId, visited = new Set()) => {
+                if (visited.has(childId)) return false;
+                visited.add(childId);
+                const child = goals[childId];
+                if (!child || !child.parentId) return false;
+                if (child.parentId === parentId) return true;
+                return isDescendant(child.parentId, parentId, visited);
+            };
+            
+            return !isDescendant(g.id, goalId);
         });
+        
+        const parentSelect = rootEl.querySelector('#plot-drawer-goal-parent');
+        parentSelect.innerHTML = `
+            <option value="">-- 无父目标 --</option>
+            ${cycleFreeGoals.map(g => `<option value="${g.id}">${escapeHtml(g.title)}</option>`).join('')}
+        `;
+        parentSelect.value = goal.parentId || '';
+        
+        // 3. Type Selection & Condition triggers
+        const typeSelect = rootEl.querySelector('#plot-drawer-goal-type');
+        typeSelect.value = goal.type || 'manual';
+        
+        rootEl.querySelector('#plot-drawer-cond-variable-group').style.display = goal.type === 'variable' ? 'flex' : 'none';
+        rootEl.querySelector('#plot-drawer-cond-keyword-group').style.display = goal.type === 'keyword' ? 'flex' : 'none';
+        
+        // Fill values
+        rootEl.querySelector('#plot-drawer-cond-variable-expr').value = goal.conditions?.variable || '';
+        rootEl.querySelector('#plot-drawer-cond-variable-expr-fail').value = goal.conditions?.variableFail || '';
+        rootEl.querySelector('#plot-drawer-cond-keywords').value = Array.isArray(goal.conditions?.keywords) 
+            ? goal.conditions.keywords.join(', ') 
+            : '';
+        rootEl.querySelector('#plot-drawer-cond-keywords-fail').value = Array.isArray(goal.conditions?.keywordsFail) 
+            ? goal.conditions.keywordsFail.join(', ') 
+            : '';
+    
+        const injectLineTemplateInput = rootEl.querySelector('#plot-drawer-goal-inject-line-template');
+        if (injectLineTemplateInput) {
+            injectLineTemplateInput.value = goal.injectLineTemplate || '';
+        }
+            
+        // 4. Action list loading
+        const actionListContainer = rootEl.querySelector('#plot-drawer-action-list');
+        actionListContainer.innerHTML = '';
+        actionRowCompilers = [];
+        
+        let actions = [];
+        if (Array.isArray(goal.actions)) {
+            actions = goal.actions;
+        } else if (goal.actions && typeof goal.actions === 'object') {
+            actions = [goal.actions];
+        }
+        
+        actions.forEach(action => {
+            const rowObj = createActionRowDOM(action, tempId);
+            actionListContainer.appendChild(rowObj.dom);
+            actionRowCompilers.push(rowObj.getActionConfig);
+        });
+        
+        // Render custom fields
+        const customFieldsList = rootEl.querySelector('#plot-drawer-custom-fields-list');
+        if (customFieldsList) {
+            customFieldsList.innerHTML = '';
+            const renderCustomFieldRow = (key = '', val = '') => {
+                const row = document.createElement('div');
+                row.className = 'plot-custom-field-row';
+                row.style.cssText = 'display: flex; gap: 6px; align-items: center; width: 100%;';
+                row.innerHTML = `
+                    <input type="text" class="plot-input field-key" placeholder="属性名(如 reward)" value="${escapeHtml(key)}" style="flex: 1; font-size: 0.85em; padding: 4px 6px;">
+                    <input type="text" class="plot-input field-val" placeholder="属性值" value="${escapeHtml(val)}" style="flex: 2; font-size: 0.85em; padding: 4px 6px;">
+                    <i class="fa-solid fa-trash-can field-delete" style="cursor: pointer; color: var(--SmartThemeQuoteColor); font-size: 0.9em; padding: 0 4px;" title="删除属性"></i>
+                `;
+                row.querySelector('.field-delete').addEventListener('click', () => row.remove());
+                customFieldsList.appendChild(row);
+            };
+            const CORE_GOAL_KEYS = ['id', 'parentId', 'title', 'name', 'description', 'status', 'type', 'conditions', 'actions', 'injectLineTemplate', 'completedDetail'];
+            const extraKeys = Object.keys(goal).filter(k => !CORE_GOAL_KEYS.includes(k));
+            extraKeys.forEach(k => {
+                renderCustomFieldRow(k, goal[k]);
+            });
+        }
+    
+        // 5. Slide show Drawer
+        configDrawer.style.display = 'flex';
+        setTimeout(() => { configDrawer.classList.add('show'); }, 10);
+    } catch (err) {
+        console.error('[Plot Goals] openConfigDrawer failed:', err);
     }
-
-
-
-    // 5. Slide show Drawer
-    configDrawer.style.display = 'flex';
-    setTimeout(() => { configDrawer.classList.add('show'); }, 10);
 }
 
 // ── Action Row DOM Builder ─────────────────────────────────────────────────────

@@ -5,10 +5,11 @@
  */
 
 import { getContext, extension_settings } from '../../../../../extensions.js';
-import { loadWorldInfo } from '../../../../../world-info.js';
+import { selected_world_info, loadWorldInfo } from '../../../../../world-info.js';
 import { listConnections } from '../core/api-client.js';
 import { getPlotValue, savePlotValue } from '../core/indexeddb.js';
-import { renderBookChecklist, setupAccordion } from '../utils/dom.js';
+import { renderBookChecklist, setupAccordion, subscribeWIRefresh } from '../utils/dom.js';
+import { get } from '../core/store.js';
 
 // Helper to escape HTML safely
 function escapeHtml(text) {
@@ -285,27 +286,35 @@ export function createModuleConfigDrawer(moduleId, containerEl, onSave) {
                                 <i class="fa-solid fa-chevron-down plot-accordion-icon" style="font-size:0.85em;"></i>
                             </div>
                             <div class="plot-accordion-body plot-drawer-acc-body-lore" style="display:none; padding:12px; flex-direction:column; gap:10px; background:transparent;">
-                                <label style="display:flex; align-items:center; gap:6px; font-size:0.85em; cursor:pointer;">
-                                    <input type="checkbox" class="plot-drawer-wi-char-chk"> 注入角色卡绑定的世界书
-                                </label>
-                                <label style="display:flex; align-items:center; gap:6px; font-size:0.85em; cursor:pointer;">
-                                    <input type="checkbox" class="plot-drawer-wi-chat-chk"> 注入当前聊天绑定的独立世界书
-                                </label>
-                                <label style="display:flex; align-items:center; gap:6px; font-size:0.85em; cursor:pointer;">
-                                    <input type="checkbox" class="plot-drawer-wi-global-chk"> 注入全局启用的世界书
-                                </label>
-                                
-                                <div class="plot-setting-group" style="margin-top:6px; margin-bottom:8px;">
-                                    <label class="plot-label" style="font-size:0.85em;">独立启用世界书</label>
-                                    <select class="plot-drawer-wi-custom-select plot-select" style="width:100%;"></select>
+                                <!-- 角色书 -->
+                                <div>
+                                    <label style="display:flex; align-items:center; gap:6px; font-size:0.85em; cursor:pointer; margin-bottom: 0;">
+                                        <input type="checkbox" class="plot-drawer-wi-char-chk"> 注入角色卡绑定的世界书
+                                    </label>
+                                    <div class="plot-drawer-wi-char-container" style="margin-left: 20px; margin-top: 4px;"></div>
                                 </div>
 
-                                <div style="border-top:1px solid var(--SmartThemeBorderColor); margin-top:8px; padding-top:8px;">
-                                    <div style="font-size:0.82em; font-weight:bold; color:var(--SmartThemeEmColor); margin-bottom:6px;">自选白名单条目细化</div>
-                                    <div class="plot-drawer-wi-char-container"></div>
-                                    <div class="plot-drawer-wi-chat-container"></div>
-                                    <div class="plot-drawer-wi-global-container" style="display:flex; flex-direction:column; gap:6px;"></div>
-                                    <div class="plot-drawer-wi-custom-container"></div>
+                                <!-- 全局书 -->
+                                <div style="border-top:1px solid rgba(255,255,255,0.05); padding-top:8px;">
+                                    <label style="display:flex; align-items:center; gap:6px; font-size:0.85em; cursor:pointer; margin-bottom: 0;">
+                                        <input type="checkbox" class="plot-drawer-wi-global-chk"> 注入全局启用的世界书
+                                    </label>
+                                    <div class="plot-drawer-wi-global-container" style="display:flex; flex-direction:column; gap:4px; margin-left: 20px; margin-top: 4px;"></div>
+                                </div>
+
+                                <!-- 聊天书 -->
+                                <div style="border-top:1px solid rgba(255,255,255,0.05); padding-top:8px;">
+                                    <label style="display:flex; align-items:center; gap:6px; font-size:0.85em; cursor:pointer; margin-bottom: 0;">
+                                        <input type="checkbox" class="plot-drawer-wi-chat-chk"> 注入当前聊天绑定的独立世界书
+                                    </label>
+                                    <div class="plot-drawer-wi-chat-container" style="margin-left: 20px; margin-top: 4px;"></div>
+                                </div>
+                                
+                                <!-- 独立启用世界书 -->
+                                <div class="plot-setting-group" style="border-top:1px solid rgba(255,255,255,0.05); padding-top:8px; margin-top:6px; margin-bottom:8px;">
+                                    <label class="plot-label" style="font-size:0.85em;">独立启用世界书</label>
+                                    <select class="plot-drawer-wi-custom-select plot-select" style="width:100%; margin-bottom:4px;"></select>
+                                    <div class="plot-drawer-wi-custom-container" style="margin-left: 20px; margin-top: 4px;"></div>
                                 </div>
 
                                 <!-- 全局过滤设置 -->
@@ -371,9 +380,12 @@ export function createModuleConfigDrawer(moduleId, containerEl, onSave) {
                 <div class="plot-setting-group" id="plot-goals-badges-settings" style="border-top: 1px solid var(--SmartThemeBorderColor); padding-top: 8px; margin-top: 8px;">
                     <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px;">
                         <label class="plot-label">自定义徽章映射与颜色</label>
-                        <button id="plot-drawer-add-badge-rule-btn" class="menu_button plot-btn" style="padding: 1px 6px; font-size: 0.72em;"><i class="fa-solid fa-plus"></i> 添加徽章</button>
+                        <div style="display: flex; gap: 6px;">
+                            <button id="plot-drawer-scan-badges-btn" class="menu_button plot-btn" style="padding: 1px 6px; font-size: 0.72em;" title="扫描当前全部任务数据，自动导入未映射的自定义字段"><i class="fa-solid fa-arrows-spin"></i> 扫描已有字段</button>
+                            <button id="plot-drawer-add-badge-rule-btn" class="menu_button plot-btn" style="padding: 1px 6px; font-size: 0.72em;"><i class="fa-solid fa-plus"></i> 添加徽章</button>
+                        </div>
                     </div>
-                    <div id="plot-drawer-badges-rules-list" style="display: flex; flex-direction: column; gap: 6px; max-height: 140px; overflow-y: auto; padding: 4px; border: 1px dashed var(--SmartThemeBorderColor); border-radius: 4px; background: rgba(0,0,0,0.1);">
+                    <div id="plot-drawer-badges-rules-list" style="display: flex; flex-direction: column; gap: 6px; max-height: 200px; overflow-y: auto; overflow-x: hidden; box-sizing: border-box; padding: 4px; border: 1px dashed var(--SmartThemeBorderColor); border-radius: 4px; background: rgba(0,0,0,0.1);">
                         <!-- Badges rules list renders here -->
                     </div>
                 </div>
@@ -444,6 +456,8 @@ export function createModuleConfigDrawer(moduleId, containerEl, onSave) {
     let localConfig = null;
     let lorebookSelections = []; // list of selected "bookName:uid"
     let localRegexRules = [];
+    let localDisabledRegexIds = [];
+    let _drawerWiUnsubscribe = null;
     
     const modeNameInput = drawer.querySelector('.plot-drawer-mode-name-input');
     const modeAddBtn = drawer.querySelector('.plot-drawer-mode-add-btn');
@@ -517,6 +531,10 @@ export function createModuleConfigDrawer(moduleId, containerEl, onSave) {
     // Cancel / Close
     const hide = () => {
         drawer.classList.remove('show');
+        if (_drawerWiUnsubscribe) {
+            _drawerWiUnsubscribe();
+            _drawerWiUnsubscribe = null;
+        }
         setTimeout(() => { drawer.style.display = 'none'; }, 200);
     };
     closeBtn.addEventListener('click', hide);
@@ -604,6 +622,7 @@ export function createModuleConfigDrawer(moduleId, containerEl, onSave) {
         mode.reading.customLorebookName = drawer.querySelector('.plot-drawer-wi-custom-select').value;
         mode.reading.manuallySelectedEntries = [...lorebookSelections];
         mode.reading.regexRules = [...localRegexRules];
+        mode.reading.disabledRegexIds = [...localDisabledRegexIds];
         mode.reading.summaryJsExpression = drawer.querySelector('.plot-drawer-read-summary-expr').value.trim();
         
         if (moduleId === 'goals') {
@@ -618,9 +637,11 @@ export function createModuleConfigDrawer(moduleId, containerEl, onSave) {
             drawer.querySelectorAll('#plot-drawer-badges-rules-list .plot-badge-rule-row').forEach(row => {
                 const key = row.querySelector('.badge-key').value.trim();
                 const label = row.querySelector('.badge-label').value.trim();
-                const color = row.querySelector('.badge-color').value;
+                const color = row.querySelector('.badge-color').value.trim();
+                const bgColor = row.querySelector('.badge-bg-color').value.trim();
+                const borderColor = row.querySelector('.badge-border-color').value.trim();
                 if (key && label) {
-                    finalBadges[key] = { label, color };
+                    finalBadges[key] = { label, color, bgColor, borderColor };
                 }
             });
             if (!getContext().extensionSettings.plot) getContext().extensionSettings.plot = {};
@@ -654,11 +675,18 @@ export function createModuleConfigDrawer(moduleId, containerEl, onSave) {
     // ── Lorebook checklist rendering ──
     const refreshLorebooksList = async () => {
         const ctx = getContext();
-        const charBookName = ctx.characterBook;
-        const chatBookName = ctx.chatBook;
+        const char = ctx.characters?.[ctx.characterId];
+        let charBookName = '';
+        if (char) {
+            const rawBook = char.data?.character_book || char.character_book;
+            if (rawBook) {
+                charBookName = rawBook.name || `${char.name}'s Lorebook`;
+            }
+        }
+        const chatBookName = ctx.chatMetadata?.world_info || '';
         
         // Global books
-        const globalBooks = ctx.worldInfoSettings?.world_info || [];
+        const globalBooks = Array.isArray(selected_world_info) ? selected_world_info : [];
         
         const loadWorldInfoFn = loadWorldInfo || ctx.loadWorldInfo;
         if (!loadWorldInfoFn) return;
@@ -720,28 +748,88 @@ export function createModuleConfigDrawer(moduleId, containerEl, onSave) {
         const listContainer = drawer.querySelector('.plot-drawer-regex-list');
         listContainer.innerHTML = '';
         
+        const getActionText = (rule) => {
+            const act = rule.action || 'replace';
+            if (act === 'delete') return '🗑️';
+            if (act === 'keep') return '📌';
+            return `&rarr; ${escapeHtml(rule.replace || '""')}`;
+        };
+
+        const globalRules = extension_settings.plot?.reading?.regexRules || [];
+
+        // 1. Render Global rules
+        globalRules.forEach((rule) => {
+            const row = document.createElement('div');
+            row.style.cssText = 'display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:6px; padding:6px; border-bottom:1px solid rgba(255,255,255,0.05); font-size:0.85em; background:var(--SmartThemeChatTintColor); border:1px solid var(--SmartThemeBorderColor); border-radius:4px; margin-bottom: 4px;';
+            
+            const isChecked = !localDisabledRegexIds.includes(rule.id);
+            const actionLabel = rule.action === 'delete' ? '删除匹配' : (rule.action === 'keep' ? '仅保留匹配' : `替换: ${rule.replace || '""'}`);
+            
+            row.innerHTML = `
+                <div style="display:flex; align-items:center; gap:8px;">
+                    <input type="checkbox" class="plot-drawer-regex-toggle" data-type="global" data-id="${rule.id}" ${isChecked ? 'checked' : ''}>
+                    <span style="font-weight:600;">${escapeHtml(rule.name)} <span style="font-size:0.8em; opacity:0.6;">(全局)</span></span>
+                </div>
+                <div style="font-size:0.8em; opacity:0.6; font-family:monospace; max-width:180px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;" title="匹配: ${escapeHtml(rule.find)} | 操作: ${actionLabel}">
+                    ${escapeHtml(rule.find)} ${getActionText(rule)}
+                </div>
+            `;
+            listContainer.appendChild(row);
+        });
+
+        // 2. Render Mode-specific rules
         localRegexRules.forEach((rule, idx) => {
             const row = document.createElement('div');
-            row.style.cssText = 'display:flex; justify-content:space-between; align-items:center; padding:5px; border-bottom:1px solid rgba(255,255,255,0.05); font-size:0.85em; background:var(--SmartThemeChatTintColor); border:1px solid var(--SmartThemeBorderColor); border-radius:4px; margin-bottom: 4px;';
+            row.style.cssText = 'display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:6px; padding:6px; border-bottom:1px solid rgba(255,255,255,0.05); font-size:0.85em; background:var(--SmartThemeChatTintColor); border:1px solid var(--SmartThemeBorderColor); border-radius:4px; margin-bottom: 4px;';
             
-            const actionText = rule.action === 'delete' ? 'Delete Match' : (rule.action === 'keep' ? 'Keep Match' : `Replace: ${escapeHtml(rule.replace || '""')}`);
-            const info = document.createElement('div');
-            info.style.cssText = 'display:flex; flex-direction:column; gap:2px; overflow:hidden;';
-            info.innerHTML = `
-                <span style="font-weight:bold; color:var(--SmartThemeEmColor);">${escapeHtml(rule.name || '正则规则')}</span>
-                <span style="font-family:monospace; font-size:0.8em; opacity:0.7; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">Find: ${escapeHtml(rule.find)} | ${actionText}</span>
+            const isChecked = !rule.disabled;
+            const actionLabel = rule.action === 'delete' ? '删除匹配' : (rule.action === 'keep' ? '仅保留匹配' : `替换: ${rule.replace || '""'}`);
+            
+            row.innerHTML = `
+                <div style="display:flex; align-items:center; gap:8px;">
+                    <input type="checkbox" class="plot-drawer-regex-toggle" data-type="mode" data-idx="${idx}" ${isChecked ? 'checked' : ''}>
+                    <span style="font-weight:600; color:var(--SmartThemeEmColor);">${escapeHtml(rule.name)} <span style="font-size:0.8em; opacity:0.6;">(专属)</span></span>
+                </div>
+                <div style="display:flex; align-items:center; gap:8px; flex-wrap:wrap;">
+                    <div style="font-size:0.8em; opacity:0.6; font-family:monospace; max-width:130px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;" title="匹配: ${escapeHtml(rule.find)} | 操作: ${actionLabel}">
+                        ${escapeHtml(rule.find)} ${getActionText(rule)}
+                    </div>
+                    <button class="plot-btn plot-drawer-regex-edit" data-idx="${idx}" title="编辑规则" style="padding:2px 6px;"><i class="fa-solid fa-pen"></i></button>
+                    <button class="plot-btn plot-drawer-regex-delete" data-idx="${idx}" title="删除规则" style="padding:2px 6px; color:var(--SmartThemeQuoteColor);"><i class="fa-solid fa-trash"></i></button>
+                </div>
             `;
-            row.appendChild(info);
-            
-            const btns = document.createElement('div');
-            btns.style.cssText = 'display:flex; gap:4px; flex-shrink:0;';
-            
-            // Edit
-            const editBtn = document.createElement('button');
-            editBtn.className = 'plot-btn';
-            editBtn.style.padding = '2px 6px;';
-            editBtn.innerHTML = '<i class="fa-solid fa-pen"></i>';
-            editBtn.addEventListener('click', () => {
+            listContainer.appendChild(row);
+        });
+
+        // Bind checkbox toggles
+        listContainer.querySelectorAll('.plot-drawer-regex-toggle').forEach(cb => {
+            cb.addEventListener('change', () => {
+                if (cb.dataset.type === 'global') {
+                    const ruleId = cb.dataset.id;
+                    if (!cb.checked) {
+                        if (!localDisabledRegexIds.includes(ruleId)) {
+                            localDisabledRegexIds.push(ruleId);
+                        }
+                    } else {
+                        localDisabledRegexIds = localDisabledRegexIds.filter(id => id !== ruleId);
+                    }
+                } else {
+                    const ruleIdx = Number(cb.dataset.idx);
+                    if (localRegexRules[ruleIdx]) {
+                        localRegexRules[ruleIdx].disabled = !cb.checked;
+                    }
+                }
+            });
+        });
+
+        // Bind Edit for mode-specific rules
+        listContainer.querySelectorAll('.plot-drawer-regex-edit').forEach(btn => {
+            btn.addEventListener('click', (e) => {
+                e.preventDefault();
+                const ruleIdx = Number(btn.dataset.idx);
+                const rule = localRegexRules[ruleIdx];
+                if (!rule) return;
+                
                 showRegexEditorModal(rule.name, rule.find, rule.replace, rule.action || 'replace', (newName, newFind, newReplace, newAction) => {
                     rule.name = newName;
                     rule.find = newFind;
@@ -750,23 +838,20 @@ export function createModuleConfigDrawer(moduleId, containerEl, onSave) {
                     refreshRegexRulesList();
                 });
             });
-            btns.appendChild(editBtn);
-            
-            // Delete
-            const delBtn = document.createElement('button');
-            delBtn.className = 'plot-btn';
-            delBtn.style.cssText = 'padding:2px 6px; color:var(--SmartThemeQuoteColor);';
-            delBtn.innerHTML = '<i class="fa-solid fa-trash"></i>';
-            delBtn.addEventListener('click', () => {
-                if (confirm(`删除规则 "${rule.name}" 吗？`)) {
-                    localRegexRules.splice(idx, 1);
+        });
+
+        // Bind Delete for mode-specific rules
+        listContainer.querySelectorAll('.plot-drawer-regex-delete').forEach(btn => {
+            btn.addEventListener('click', (e) => {
+                e.preventDefault();
+                const ruleIdx = Number(btn.dataset.idx);
+                const rule = localRegexRules[ruleIdx];
+                if (!rule) return;
+                if (confirm(`删除专属规则 "${rule.name}" 吗？`)) {
+                    localRegexRules.splice(ruleIdx, 1);
                     refreshRegexRulesList();
                 }
             });
-            btns.appendChild(delBtn);
-            
-            row.appendChild(btns);
-            listContainer.appendChild(row);
         });
     };
     
@@ -865,11 +950,11 @@ export function createModuleConfigDrawer(moduleId, containerEl, onSave) {
             const r = replaceInput.value;
             const act = actionSelect.value;
             
-            if (!n || !f) {
-                alert('名称与匹配表达式不能为空');
+            if (!f) {
+                alert('匹配表达式不能为空');
                 return;
             }
-            onRuleSave(n, f, r, act);
+            onRuleSave(n || '专属规则', f, r, act);
             overlay.remove();
         });
         
@@ -908,6 +993,7 @@ export function createModuleConfigDrawer(moduleId, containerEl, onSave) {
         
         lorebookSelections = [...(localConfig.reading.manuallySelectedEntries || [])];
         localRegexRules = [...(localConfig.reading.regexRules || [])];
+        localDisabledRegexIds = [...(localConfig.reading.disabledRegexIds || [])];
         
         // Fill mode name
         modeNameInput.value = localConfig.name || '默认模式';
@@ -985,6 +1071,26 @@ export function createModuleConfigDrawer(moduleId, containerEl, onSave) {
         
         let localCustomBadges = { ...(getContext().extensionSettings.plot?.customBadges || {}) };
         
+        const syncInputsToLocalBadges = () => {
+            const listContainer = drawer.querySelector('#plot-drawer-badges-rules-list');
+            if (!listContainer) return;
+            
+            const updatedBadges = {};
+            listContainer.querySelectorAll('.plot-badge-rule-row').forEach(row => {
+                const keyInput = row.querySelector('.badge-key');
+                let key = keyInput.value.trim().replace(/[^a-zA-Z0-9_]/g, '');
+                const label = row.querySelector('.badge-label').value.trim();
+                const color = row.querySelector('.badge-color').value.trim();
+                const bgColor = row.querySelector('.badge-bg-color').value.trim();
+                const borderColor = row.querySelector('.badge-border-color').value.trim();
+                
+                const tempId = keyInput.dataset.tempId || 'new_attr_' + Date.now();
+                const finalKey = key || tempId;
+                updatedBadges[finalKey] = { label, color, bgColor, borderColor };
+            });
+            localCustomBadges = updatedBadges;
+        };
+
         const refreshBadgesRulesList = () => {
             const listContainer = drawer.querySelector('#plot-drawer-badges-rules-list');
             if (!listContainer) return;
@@ -993,14 +1099,116 @@ export function createModuleConfigDrawer(moduleId, containerEl, onSave) {
             Object.entries(localCustomBadges).forEach(([key, val]) => {
                 const row = document.createElement('div');
                 row.className = 'plot-badge-rule-row';
-                row.style.cssText = 'display: flex; gap: 6px; align-items: center; width: 100%; margin-bottom: 4px;';
+                row.style.cssText = 'display: flex; flex-direction: column; gap: 6px; padding: 6px 4px; border-bottom: 1px dashed var(--SmartThemeBorderColor); width: 100%; margin-bottom: 4px;';
+                
+                const displayKey = key.startsWith('new_attr_') ? '' : key;
+                const isCustom = val.color && !val.color.startsWith('var');
+                
                 row.innerHTML = `
-                    <input type="text" class="plot-input badge-key" placeholder="键名(如 reward)" value="${escapeHtml(key)}" disabled style="flex: 1; font-size: 0.82em; padding: 2px 4px; height: 24px;">
-                    <input type="text" class="plot-input badge-label" placeholder="中文标签" value="${escapeHtml(val.label || '')}" style="flex: 1.2; font-size: 0.82em; padding: 2px 4px; height: 24px;">
-                    <input type="color" class="badge-color" value="${escapeHtml(val.color || '#ffaa00')}" style="width: 28px; height: 24px; border: none; padding: 0; background: none; cursor: pointer; flex-shrink: 0;">
-                    <i class="fa-solid fa-trash-can badge-delete" style="cursor: pointer; color: var(--SmartThemeQuoteColor); font-size: 0.85em; padding: 0 4px;" title="删除"></i>
+                    <!-- Row 1: Core key mapping -->
+                    <div style="display: flex; gap: 4px; align-items: center; width: 100%; box-sizing: border-box;">
+                        <input type="text" class="plot-input badge-key" placeholder="键名(如 exp)" value="${escapeHtml(displayKey)}" style="flex: 1; min-width: 0; box-sizing: border-box; font-size: 0.82em; padding: 2px 4px; height: 24px;" title="英文键名" data-temp-id="${escapeHtml(key)}">
+                        <input type="text" class="plot-input badge-label" placeholder="中文" value="${escapeHtml(val.label || '')}" style="flex: 1.2; min-width: 0; box-sizing: border-box; font-size: 0.82em; padding: 2px 4px; height: 24px;" title="中文标签名称">
+                        <select class="plot-select badge-palette-select" style="flex: 1.5; min-width: 0; box-sizing: border-box; font-size: 0.82em; padding: 0 4px; height: 24px;" title="选择色系预设">
+                            <option value="custom">-- 自定义配色 --</option>
+                            <optgroup label="酒馆自适应">
+                                <option value="st-accent" ${val.color === 'var(--SmartThemeEmColor)' ? 'selected' : ''}>酒馆强调</option>
+                                <option value="st-body" ${val.color === 'var(--SmartThemeBodyColor)' ? 'selected' : ''}>酒馆文本</option>
+                                <option value="st-underline" ${val.color === 'var(--SmartThemeUnderlineColor)' ? 'selected' : ''}>酒馆下划线</option>
+                                <option value="st-quote" ${val.color === 'var(--SmartThemeQuoteColor)' ? 'selected' : ''}>酒馆引用</option>
+                            </optgroup>
+                            <optgroup label="莫兰迪色系">
+                                <option value="morandi-pink" ${val.color === '#9c6d6d' ? 'selected' : ''}>莫兰迪粉</option>
+                                <option value="morandi-green" ${val.color === '#697c6c' ? 'selected' : ''}>莫兰迪绿</option>
+                                <option value="morandi-blue" ${val.color === '#5d7486' ? 'selected' : ''}>莫兰迪蓝</option>
+                                <option value="morandi-grey" ${val.color === '#72777b' ? 'selected' : ''}>莫兰迪灰</option>
+                            </optgroup>
+                            <optgroup label="马卡龙色系">
+                                <option value="macaron-pink" ${val.color === '#ff70a6' ? 'selected' : ''}>马卡龙粉</option>
+                                <option value="macaron-blue" ${val.color === '#5390d9' ? 'selected' : ''}>马卡龙蓝</option>
+                                <option value="macaron-purple" ${val.color === '#a370f7' ? 'selected' : ''}>马卡龙紫</option>
+                                <option value="macaron-orange" ${val.color === '#ff9f1c' ? 'selected' : ''}>马卡龙橙</option>
+                            </optgroup>
+                        </select>
+                        <i class="fa-solid fa-trash-can badge-delete" style="cursor: pointer; color: var(--SmartThemeQuoteColor); font-size: 0.85em; padding: 0 4px;" title="删除"></i>
+                    </div>
+                    
+                    <!-- Hidden fields to preserve CSS variables exactly -->
+                    <input type="hidden" class="badge-color" value="${escapeHtml(val.color || '')}">
+                    <input type="hidden" class="badge-bg-color" value="${escapeHtml(val.bgColor || '')}">
+                    <input type="hidden" class="badge-border-color" value="${escapeHtml(val.borderColor || '')}">
+                    
+                    <!-- Row 2: Advanced Color Value override pickers (only shown for custom/hex colors) -->
+                    <div class="plot-color-fine-tune-row" style="display: ${isCustom ? 'flex' : 'none'}; gap: 12px; align-items: center; width: 100%; box-sizing: border-box; font-size: 0.78em; opacity: 0.85; padding-left: 2px;">
+                        <span style="opacity: 0.6; flex-shrink: 0; font-size: 0.95em; margin-right: 2px;">自定义色彩:</span>
+                        
+                        <div style="display: flex; align-items: center; gap: 4px; flex: 1; min-width: 0;">
+                            <span style="opacity: 0.6;">字:</span>
+                            <input type="color" class="badge-color-picker" value="${val.color && val.color.startsWith('#') ? val.color : '#ffaa00'}" style="flex: 1; min-width: 0; height: 18px; border: none; padding: 0; background: none; cursor: pointer;" title="文字颜色">
+                        </div>
+                        
+                        <div style="display: flex; align-items: center; gap: 4px; flex: 1; min-width: 0;">
+                            <span style="opacity: 0.6;">背:</span>
+                            <input type="color" class="badge-bg-color-picker" value="${val.bgColor && val.bgColor.startsWith('#') ? val.bgColor : '#222222'}" style="flex: 1; min-width: 0; height: 18px; border: none; padding: 0; background: none; cursor: pointer;" title="背景颜色">
+                        </div>
+                        
+                        <div style="display: flex; align-items: center; gap: 4px; flex: 1; min-width: 0;">
+                            <span style="opacity: 0.6;">边:</span>
+                            <input type="color" class="badge-border-color-picker" value="${val.borderColor && val.borderColor.startsWith('#') ? val.borderColor : '#ffaa00'}" style="flex: 1; min-width: 0; height: 18px; border: none; padding: 0; background: none; cursor: pointer;" title="边框颜色">
+                        </div>
+                    </div>
                 `;
+                
+                const paletteSelect = row.querySelector('.badge-palette-select');
+                const colorInput = row.querySelector('.badge-color');
+                const bgInput = row.querySelector('.badge-bg-color');
+                const borderInput = row.querySelector('.badge-border-color');
+                
+                const colorPicker = row.querySelector('.badge-color-picker');
+                const bgPicker = row.querySelector('.badge-bg-color-picker');
+                const borderPicker = row.querySelector('.badge-border-color-picker');
+                const fineTuneRow = row.querySelector('.plot-color-fine-tune-row');
+                
+                // Sync pickers inputs to hidden text fields
+                colorPicker.addEventListener('input', () => { colorInput.value = colorPicker.value; });
+                bgPicker.addEventListener('input', () => { bgInput.value = bgPicker.value; });
+                borderPicker.addEventListener('input', () => { borderInput.value = borderPicker.value; });
+                
+                const presets = {
+                    'st-accent': { color: 'var(--SmartThemeEmColor)', bgColor: 'transparent', borderColor: 'var(--SmartThemeEmColor)' },
+                    'st-body': { color: 'var(--SmartThemeBodyColor)', bgColor: 'var(--SmartThemeChatTintColor)', borderColor: 'var(--SmartThemeBorderColor)' },
+                    'st-underline': { color: 'var(--SmartThemeUnderlineColor)', bgColor: 'transparent', borderColor: 'var(--SmartThemeUnderlineColor)' },
+                    'st-quote': { color: 'var(--SmartThemeQuoteColor)', bgColor: 'transparent', borderColor: 'var(--SmartThemeQuoteColor)' },
+                    
+                    'morandi-pink': { color: '#9c6d6d', bgColor: '#f4ebeb', borderColor: '#d6c1c1' },
+                    'morandi-green': { color: '#697c6c', bgColor: '#edf1ed', borderColor: '#c5cfc7' },
+                    'morandi-blue': { color: '#5d7486', bgColor: '#ebf1f5', borderColor: '#bfcdd6' },
+                    'morandi-grey': { color: '#72777b', bgColor: '#f0f2f3', borderColor: '#ced2d5' },
+                    
+                    'macaron-pink': { color: '#ff70a6', bgColor: '#ffe5ec', borderColor: '#ffc2d1' },
+                    'macaron-blue': { color: '#5390d9', bgColor: '#eaf2f8', borderColor: '#bbd4f1' },
+                    'macaron-purple': { color: '#a370f7', bgColor: '#f3e8ff', borderColor: '#e9d5ff' },
+                    'macaron-orange': { color: '#ff9f1c', bgColor: '#fff4e6', borderColor: '#ffe0b2' }
+                };
+                
+                paletteSelect.addEventListener('change', () => {
+                    const preset = presets[paletteSelect.value];
+                    if (preset) {
+                        colorInput.value = preset.color;
+                        bgInput.value = preset.bgColor;
+                        borderInput.value = preset.borderColor;
+                        fineTuneRow.style.display = 'none';
+                    } else if (paletteSelect.value === 'custom') {
+                        // Restore custom colors from pickers
+                        colorInput.value = colorPicker.value;
+                        bgInput.value = bgPicker.value;
+                        borderInput.value = borderPicker.value;
+                        fineTuneRow.style.display = 'flex';
+                    }
+                });
+                
                 row.querySelector('.badge-delete').addEventListener('click', () => {
+                    syncInputsToLocalBadges();
                     delete localCustomBadges[key];
                     refreshBadgesRulesList();
                 });
@@ -1008,25 +1216,71 @@ export function createModuleConfigDrawer(moduleId, containerEl, onSave) {
             });
         };
 
+        const scanBtn = drawer.querySelector('#plot-drawer-scan-badges-btn');
+        if (scanBtn) {
+            const newScanBtn = scanBtn.cloneNode(true);
+            scanBtn.parentNode.replaceChild(newScanBtn, scanBtn);
+            newScanBtn.addEventListener('click', (e) => {
+                e.preventDefault();
+                syncInputsToLocalBadges();
+                
+                const goals = get('goals') || {};
+                const CORE_KEYS = ['id', 'parentId', 'title', 'name', 'description', 'status', 'type', 'conditions', 'actions', 'injectLineTemplate', 'completedDetail'];
+                const detectedKeys = new Set();
+                
+                Object.values(goals).forEach(goal => {
+                    Object.keys(goal).forEach(k => {
+                        if (!CORE_KEYS.includes(k) && !localCustomBadges[k]) {
+                            detectedKeys.add(k);
+                        }
+                    });
+                });
+                
+                if (detectedKeys.size === 0) {
+                    alert('未在当前任务数据中检测到未映射的新自定义属性字段。');
+                    return;
+                }
+                
+                const labelMap = { reward: '奖励', rewards: '奖励', awards: '奖励', innerVoice: '心声', exp: '经验', clue: '线索' };
+                
+                detectedKeys.forEach(key => {
+                    localCustomBadges[key] = {
+                        label: labelMap[key] || key,
+                        color: 'var(--SmartThemeEmColor)',
+                        bgColor: 'transparent',
+                        borderColor: 'var(--SmartThemeEmColor)'
+                    };
+                });
+                
+                refreshBadgesRulesList();
+                alert(`已成功自动导入并配置 ${detectedKeys.size} 个新属性字段：${Array.from(detectedKeys).join(', ')}`);
+            });
+        }
+
         const addBadgeRuleBtn = drawer.querySelector('#plot-drawer-add-badge-rule-btn');
         if (addBadgeRuleBtn) {
-            // Clone to remove previous listener
             const newAddBtn = addBadgeRuleBtn.cloneNode(true);
             addBadgeRuleBtn.parentNode.replaceChild(newAddBtn, addBadgeRuleBtn);
             newAddBtn.addEventListener('click', (e) => {
                 e.preventDefault();
-                const key = prompt('请输入自定义字段英文键名（如 exp, clue）：');
-                if (!key) return;
-                const cleanKey = key.trim().replace(/[^a-zA-Z0-9_]/g, '');
-                if (!cleanKey) return;
-                
-                if (localCustomBadges[cleanKey]) {
-                    alert('该字段配置已存在！');
-                    return;
-                }
-                
-                localCustomBadges[cleanKey] = { label: cleanKey, color: '#e07832' };
+                syncInputsToLocalBadges();
+                const tempKey = 'new_attr_' + Date.now();
+                localCustomBadges[tempKey] = { 
+                    label: '', 
+                    color: 'var(--SmartThemeEmColor)', 
+                    bgColor: 'transparent', 
+                    borderColor: 'var(--SmartThemeEmColor)' 
+                };
                 refreshBadgesRulesList();
+                
+                setTimeout(() => {
+                    const rows = listContainer.querySelectorAll('.plot-badge-rule-row');
+                    const lastRow = rows[rows.length - 1];
+                    if (lastRow) {
+                        const keyInput = lastRow.querySelector('.badge-key');
+                        if (keyInput) keyInput.focus();
+                    }
+                }, 50);
             });
         }
 
@@ -1109,6 +1363,18 @@ export function createModuleConfigDrawer(moduleId, containerEl, onSave) {
             drawer.querySelector('#plot-variables-injection-settings').style.display = 'none';
         }
         
+        // Subscribe to WI updates
+        if (_drawerWiUnsubscribe) {
+            _drawerWiUnsubscribe();
+            _drawerWiUnsubscribe = null;
+        }
+        _drawerWiUnsubscribe = subscribeWIRefresh(getContext(), () => {
+            const container = drawer.querySelector('.plot-drawer-wi-char-container');
+            if (container && drawer.classList.contains('show')) {
+                refreshLorebooksList();
+            }
+        });
+
         // Display Drawer
         drawer.style.display = 'flex';
         setTimeout(() => { drawer.classList.add('show'); }, 10);
