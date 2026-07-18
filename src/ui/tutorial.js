@@ -6,16 +6,16 @@ export function renderTutorial(containerEl) {
             <!-- 三级 Tab 导航栏 -->
             <div class="plot-sub-tab-bar" id="plot-help-tabs" style="display: flex !important; margin-bottom: 0px !important; padding-bottom: 0px !important; border-bottom: 1px solid var(--SmartThemeBorderColor) !important; flex-shrink: 0 !important; gap: 0px !important;">
                 <button class="plot-sub-tab active" data-helptab="general" style="display: flex; align-items: center; gap: 6px; background: none; border: 1px solid var(--SmartThemeBorderColor); color: var(--SmartThemeEmColor); font-weight: bold; border-radius: 4px; padding: 4px 10px; font-size: 0.85em; margin-bottom: 0px !important;">
-                    <i class="fa-solid fa-earth-americas"></i> <span>通用</span>
+                    <i class="fa-solid fa-earth-americas"></i> <span>基础</span>
                 </button>
                 <button class="plot-sub-tab" data-helptab="backstage" style="display: flex; align-items: center; gap: 6px; background: none; border: 1px solid var(--SmartThemeBorderColor); color: var(--SmartThemeEmColor); font-weight: bold; border-radius: 4px; padding: 4px 10px; font-size: 0.85em; margin-bottom: 0px !important; margin-left: 8px !important;">
-                    <i class="fa-solid fa-masks-theater"></i> <span>幕后教程</span>
+                    <i class="fa-solid fa-masks-theater"></i> <span>幕后</span>
                 </button>
                 <button class="plot-sub-tab" data-helptab="goals" style="display: flex; align-items: center; gap: 6px; background: none; border: 1px solid var(--SmartThemeBorderColor); color: var(--SmartThemeEmColor); font-weight: bold; border-radius: 4px; padding: 4px 10px; font-size: 0.85em; margin-bottom: 0px !important; margin-left: 8px !important;">
-                    <i class="fa-solid fa-clipboard-list"></i> <span>目标与注入教程</span>
+                    <i class="fa-solid fa-clipboard-list"></i> <span>目标</span>
                 </button>
                 <button class="plot-sub-tab" data-helptab="variables" style="display: flex; align-items: center; gap: 6px; background: none; border: 1px solid var(--SmartThemeBorderColor); color: var(--SmartThemeEmColor); font-weight: bold; border-radius: 4px; padding: 4px 10px; font-size: 0.85em; margin-bottom: 0px !important; margin-left: 8px !important;">
-                    <i class="fa-solid fa-sliders"></i> <span>变量与触发器教程</span>
+                    <i class="fa-solid fa-sliders"></i> <span>变量</span>
                 </button>
             </div>
 

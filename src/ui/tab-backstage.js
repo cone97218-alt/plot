@@ -1724,8 +1724,10 @@ async function executeAiGeneration(chatLog, existingAiMsgToSwipe = null, isSwipe
         }
 
         // Apply Custom Reading Strategy overrides if enabled
-        let readingOverrides = {};
-        if (mode.useCustomReading) {
+        const readingOverrides = {
+            backstageHistory: chatLog
+        };
+        if (mode.useCustomReading && mode.reading) {
             // Filter global rules to exclude mode-disabled ones
             const globalRules = extension_settings.plot?.reading?.regexRules || [];
             const disabledGlobalIds = mode.reading?.disabledRegexIds || [];
@@ -1735,10 +1737,10 @@ async function executeAiGeneration(chatLog, existingAiMsgToSwipe = null, isSwipe
             const modeRules = mode.reading?.regexRules || [];
             const activeModeRules = modeRules.filter(r => !r.disabled);
 
-            readingOverrides = {
+            Object.assign(readingOverrides, {
                 ...mode.reading,
                 regexRules: [...activeGlobalRules, ...activeModeRules]
-            };
+            });
         }
 
         const compiledContext = await buildContext(readingOverrides);
@@ -1755,14 +1757,19 @@ async function executeAiGeneration(chatLog, existingAiMsgToSwipe = null, isSwipe
             }
         });
 
-        // Check if any active block in the preset contains the backstage chat history macro
+        // Check if any active block in the preset contains backstage history or user input macros
         const blocks = getBlocks('backstage', mode.presetId).filter(b => b.enabled);
-        const hasHistoryMacro = blocks.some(b => 
-            b.content && (b.content.includes('{{backstage_chat_history}}') || b.content.includes('{{bts_chat_history}}'))
+        const hasMacro = blocks.some(b => 
+            b.content && (
+                b.content.includes('{{backstage_chat_history}}') || 
+                b.content.includes('{{bts_chat_history}}') ||
+                b.content.includes('{{backstage_user_input}}') ||
+                b.content.includes('{{bts_user_input}}')
+            )
         );
 
         let messagesToSend = [];
-        if (hasHistoryMacro) {
+        if (hasMacro) {
             messagesToSend = promptParts.messages.map(m => ({ role: m.role, content: m.content }));
         } else {
             messagesToSend = [

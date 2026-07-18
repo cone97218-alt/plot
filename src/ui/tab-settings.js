@@ -143,6 +143,17 @@ async function renderDisplaySubTab(container) {
             settings.globalInjectionTemplate = globalTplArea.value;
             saveSettings();
         });
+
+        // Bind Disable Toggle
+        const disableToggle = container.querySelector('#plot-global-inject-disable-toggle');
+        if (disableToggle) {
+            disableToggle.checked = settings.injectionEnabled === false;
+            disableToggle.addEventListener('change', () => {
+                settings.injectionEnabled = !disableToggle.checked;
+                saveSettings();
+            });
+        }
+
         // Reset button
         container.querySelector('#plot-global-inject-reset')?.addEventListener('click', () => {
             settings.globalInjectionTemplate = DEFAULT_GLOBAL_INJECT_TEMPLATE;

@@ -61,10 +61,14 @@
             <div class="plot-setting-group">
                 <div style="font-size:0.82em; color:var(--SmartThemeEmColor); margin-bottom:8px; line-height:1.5;">
                     控制所有模块注入内容合并后的最终格式。使用占位符引用各模块：
-                    <br><code style="font-size:0.9em; background:var(--SmartThemeBlurTintColor); padding:1px 4px; border-radius:3px;">{{goals}}</code> — 目标模块（含块模板展开结果）
-                    <br><code style="font-size:0.9em; background:var(--SmartThemeBlurTintColor); padding:1px 4px; border-radius:3px;">{{variables}}</code> — 变量模块
-                    <br><code style="font-size:0.9em; background:var(--SmartThemeBlurTintColor); padding:1px 4px; border-radius:3px;">{{storylines}}</code> — 故事线模块
                     <br><span style="font-size:0.9em;">关闭的模块对应的整行将被自动删除。</span>
+                </div>
+                <div class="plot-toggle-row" style="display:flex; justify-content:space-between; align-items:center; margin-bottom:10px; background:rgba(0,0,0,0.05); padding:6px 10px; border-radius:4px;">
+                    <span class="plot-label" style="font-weight:normal; font-size:0.85em;">禁用全局注入 (将覆盖并关闭所有模块的注入)</span>
+                    <label class="plot-switch">
+                        <input type="checkbox" id="plot-global-inject-disable-toggle">
+                        <span class="plot-switch-slider"></span>
+                    </label>
                 </div>
                 <textarea
                     id="plot-global-injection-template"

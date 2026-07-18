@@ -42,6 +42,12 @@ export function registerHooks(eventSource, event_types) {
     // 2. Main story text generation event: trigger prompt injection
     eventSource.on(event_types.GENERATE_BEFORE_COMBINE_PROMPTS, (chatContext) => {
         try {
+            // For Chat Completion, wait until CHAT_COMPLETION_PROMPT_READY to ensure
+            // the injection is placed after the user's latest input message.
+            if (chatContext && Array.isArray(chatContext.chat)) {
+                console.log('[Plot Hooks] Chat Completion detected, deferring injection to CHAT_COMPLETION_PROMPT_READY.');
+                return;
+            }
             injectIntoPrompt(chatContext);
         } catch (e) {
             console.error('[Plot Hooks] Prompt injection failed:', e);

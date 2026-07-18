@@ -135,6 +135,12 @@
                 <textarea id="plot-drawer-var-desc" class="plot-input" rows="2" style="width: 100%; resize: vertical; font-size: 0.9em;"></textarea>
             </div>
 
+            <div class="plot-setting-group">
+                <label class="plot-label">自定义注入模板 (可选)</label>
+                <input type="text" id="plot-drawer-var-inject-template" class="plot-input" placeholder="例如: - {{name}} = {{value}} (留空则使用全局行模板)" style="width: 100%; font-size: 0.85em;">
+                <span class="plot-hint-text">支持: {{name}}, {{id}}, {{value}}, {{value_tree}}, {{desc}}, {{type}}</span>
+            </div>
+
             <!-- Triggers Manager -->
             <div style="border: 1px solid var(--SmartThemeBorderColor); border-radius: 6px; padding: 10px; background: rgba(0,0,0,0.15); display: flex; flex-direction: column; gap: 8px;">
                 <div style="display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid rgba(255,255,255,0.05); padding-bottom: 4px; margin-bottom: 4px;">

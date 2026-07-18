@@ -328,7 +328,7 @@ export async function buildContext(overrides = {}) {
     const summaryText = fetchExternalSummary(config.summaryJsExpression);
 
     // 6. Backstage specific macros
-    const backstageMessages = get('backstageHistory') || [];
+    const backstageMessages = config.backstageHistory || get('backstageHistory') || [];
 
     const lastUserMsg = backstageMessages.slice().reverse().find(m => m.role === 'user');
     const btsUserInput = lastUserMsg?.content || '';

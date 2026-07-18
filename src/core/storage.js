@@ -3,6 +3,7 @@ import { saveSettings } from '../../../../../../script.js';
 import { migrate } from './migrator.js';
 import { set, get } from './store.js';
 import { getPlotValue, savePlotValue, clearAllPlotDB } from './indexeddb.js';
+import { registerDynamicVariableMacros } from '../utils/macro.js';
 
 /**
  * Build the IndexedDB key for a backstage history record.
@@ -272,6 +273,7 @@ export async function loadPlotData() {
     set('storylines', plotData.storylines);
     set('backstageHistory', plotData.backstageHistory);
     set('backstageHistoryLoadedKey', dbKey);
+    registerDynamicVariableMacros();
 }
 
 export async function savePlotData() {

@@ -11,6 +11,7 @@ import { createVariable, deleteVariable, setVariable, evaluateTriggers } from '.
 import { savePlotData } from '../core/storage.js';
 import { createModuleConfigDrawer, getModuleModes, getActiveModeId, setActiveModeId, getActiveModeConfig } from './module-config-drawer.js';
 import { listGoals } from '../core/goal-engine.js';
+import { registerDynamicVariableMacros } from '../utils/macro.js';
 
 let rootEl = null;
 let triggerCompilers = []; // tracks functions to collect trigger configs in drawer
@@ -231,6 +232,7 @@ export async function renderVariablesTab(containerEl) {
         const name = rootEl.querySelector('#plot-drawer-var-name').value.trim();
         const type = typeSelect.value;
         const desc = rootEl.querySelector('#plot-drawer-var-desc').value.trim();
+        const injectTemplate = rootEl.querySelector('#plot-drawer-var-inject-template').value.trim();
 
         if (!id) {
             alert('变量标识 (ID/Key) 不能为空');
@@ -295,6 +297,7 @@ export async function renderVariablesTab(containerEl) {
             max,
             choices,
             description: desc,
+            injectLineTemplate: injectTemplate || undefined,
             triggers,
             order: currentOrder,
             visible: currentVisible
@@ -302,6 +305,7 @@ export async function renderVariablesTab(containerEl) {
 
         set('variables', vars);
         await savePlotData();
+        registerDynamicVariableMacros();
 
         hideDrawer();
         renderVariablesList();
@@ -722,6 +726,7 @@ function openConfigDrawer(varId = null) {
         nameInput.value = v.name || varId;
         typeSelect.value = v.type || 'number';
         descInput.value = v.description || '';
+        configDrawer.querySelector('#plot-drawer-var-inject-template').value = v.injectLineTemplate || '';
 
         minInput.value = v.min !== undefined ? v.min : '';
         maxInput.value = v.max !== undefined ? v.max : '';
@@ -747,6 +752,7 @@ function openConfigDrawer(varId = null) {
         nameInput.value = '';
         typeSelect.value = 'number';
         descInput.value = '';
+        configDrawer.querySelector('#plot-drawer-var-inject-template').value = '';
         minInput.value = '0';
         maxInput.value = '100';
         choicesInput.value = '';
