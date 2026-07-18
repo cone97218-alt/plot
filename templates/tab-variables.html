@@ -51,7 +51,7 @@
             <span style="font-size: 0.8em; opacity: 0.75; line-height: 1.4;">
                 请在下方粘贴文本。支持 JSON 键值对，或者形如 <code>好感度 = 50</code>、<code>姓名: 提米</code> 等换行键值格式。系统将智能分析并匹配类型添加。
             </span>
-            <textarea id="plot-variables-import-textarea" class="plot-input" style="flex: 1; font-family: monospace; font-size: 0.85em; width: 100%; min-height: 120px; box-sizing: border-box;" placeholder="示例：&#10;关系值: 50&#10;是否解锁据点: false&#10;位置: 咖啡馆"></textarea>
+            <textarea id="plot-variables-import-textarea" class="plot-input" style="flex: 1; font-family: monospace; font-size: 0.85em; width: 100%; min-height: 120px; box-sizing: border-box;" placeholder="示例：&#10;关系值: 50&#10;是否解锁据点: false&#10;位置: 咖啡馆" spellcheck="false" autocomplete="off" autocapitalize="off"></textarea>
             
             <div id="plot-variables-import-preview-group" style="display: none; border: 1px solid var(--SmartThemeBorderColor); border-radius: 6px; padding: 8px; background: rgba(0,0,0,0.15); max-height: 150px; overflow-y: auto; flex-direction: column; gap: 4px;">
                 <label style="font-size: 0.82em; font-weight: bold; color: var(--SmartThemeEmColor); margin-bottom: 4px;">解析预览：</label>
@@ -132,7 +132,7 @@
 
             <div class="plot-setting-group">
                 <label class="plot-label">变量描述</label>
-                <textarea id="plot-drawer-var-desc" class="plot-input" rows="2" style="width: 100%; resize: vertical; font-size: 0.9em;"></textarea>
+                <textarea id="plot-drawer-var-desc" class="plot-input" rows="2" style="width: 100%; resize: vertical; font-size: 0.9em;" spellcheck="false" autocomplete="off" autocapitalize="off"></textarea>
             </div>
 
             <div class="plot-setting-group">
@@ -193,7 +193,7 @@
                 <span style="font-size: 0.8em; opacity: 0.75;">Raw JSON 字符串：</span>
                 <span id="plot-json-raw-error-msg" style="color: var(--SmartThemeQuoteColor); font-size: 0.85em; font-weight: bold; display: none;"></span>
             </div>
-            <textarea id="plot-json-raw-textarea" class="plot-input" style="flex: 1; font-family: monospace; font-size: 0.85em; width: 100%; box-sizing: border-box; resize: none;" placeholder="[&#10;  { &quot;name&quot;: &quot;金币&quot;, &quot;count&quot;: 10 }&#10;]"></textarea>
+            <textarea id="plot-json-raw-textarea" class="plot-input" style="flex: 1; font-family: monospace; font-size: 0.85em; width: 100%; box-sizing: border-box; resize: none;" placeholder="[&#10;  { &quot;name&quot;: &quot;金币&quot;, &quot;count&quot;: 10 }&#10;]" spellcheck="false" autocomplete="off" autocapitalize="off"></textarea>
         </div>
 
         <!-- Footer -->

@@ -12,18 +12,11 @@
 
 import { get } from './store.js';
 import { extension_settings } from '../../../../../extensions.js';
+import { setExtensionPrompt } from '../../../../../../script.js';
 import { serializeVariablesInline, serializeGoalsInline, serializeStorylinesInline, serializeComplexInline, formatComplexValue, getActiveVariableSuffix } from './serializers.js';
 import { getActivePromptInjections } from './variable-engine.js';
 
 const MODULE_NAME = 'plot';
-
-function isUserRole(role, userName) {
-    if (typeof role !== 'string') return false;
-    const r = role.toLowerCase();
-    if (r === 'user') return true;
-    if (userName && role === userName) return true;
-    return false;
-}
 
 // ── Custom Goal Templates & Macro Resolving ────────────────────────────────────
 
@@ -286,144 +279,41 @@ export function getInjectionMacros() {
 
 /**
  * Hook handler for GENERATE_BEFORE_COMBINE_PROMPTS.
- * Appends the injection text block as a suffix to the last user message
- * (using shallow cloning to prevent history database pollution).
- *
- * @param {Object} chatContext - The event payload from SillyTavern
+ * Registers the global injection state block natively in SillyTavern.
  */
-export function injectIntoPrompt(chatContext) {
+export function injectIntoPrompt() {
     const s = extension_settings[MODULE_NAME] || {};
-    if (s.injectionMode === 'macro') return; // macros handle it themselves
-    if (s.injectionEnabled === false) return;
+    if (s.injectionMode === 'macro') {
+        // If macro mode is active, clear the native extension prompt block
+        setExtensionPrompt('plot_state_injection', '', -1, 0);
+        return;
+    }
 
     const injectionText = buildInjectionText();
-    if (!injectionText) return;
+    
+    // Clear/disable the native extension prompt block if:
+    // - injectionPosition is -1 (None / Disabled)
+    // - injectionText is empty
+    if (s.injectionPosition === -1 || !injectionText) {
+        setExtensionPrompt('plot_state_injection', '', -1, 0);
+        return;
+    }
+
+    const position = s.injectionPosition !== undefined ? Number(s.injectionPosition) : 0;
+    const depth = s.injectionDepth !== undefined ? Number(s.injectionDepth) : 0;
+    const role = s.injectionRole !== undefined ? Number(s.injectionRole) : 0;
 
     try {
-        if (!chatContext) return;
-
-        // Guard: prevent double injection during a single generation cycle
-        if (chatContext.plot_state_injected) {
-            console.log('[Plot Injection] Already injected in this generation context.');
-            return;
-        }
-
-        const ctx = globalThis.SillyTavern?.getContext?.() || {};
-        const userName = ctx.name1;
-        const rawChat = ctx.chat || [];
-        const lastUserChat = rawChat.slice().reverse().find(m => m.is_user);
-        const lastUserContent = lastUserChat?.mes || '';
-
-        // Case 1: Chat Completion format (e.g. OpenAI, Claude, DeepSeek API)
-        if (Array.isArray(chatContext.chat)) {
-            let userIdx = -1;
-            // Attempt 1: Content + Role Match (most precise)
-            if (lastUserContent) {
-                for (let i = chatContext.chat.length - 1; i >= 0; i--) {
-                    const m = chatContext.chat[i];
-                    if ((m.is_user === true || isUserRole(m.role, userName)) && m.content && m.content.includes(lastUserContent)) {
-                        userIdx = i;
-                        break;
-                    }
-                }
-            }
-            // Attempt 2: Case-insensitive / username role Match
-            if (userIdx === -1) {
-                for (let i = chatContext.chat.length - 1; i >= 0; i--) {
-                    const m = chatContext.chat[i];
-                    if (m.is_user === true || isUserRole(m.role, userName)) {
-                        userIdx = i;
-                        break;
-                    }
-                }
-            }
-
-            if (userIdx !== -1) {
-                const originalMsg = chatContext.chat[userIdx];
-                if (originalMsg.content && originalMsg.content.includes(injectionText.trim())) {
-                    chatContext.plot_state_injected = true;
-                    return;
-                }
-                const mutatedMsg = { ...originalMsg };
-                mutatedMsg.content = (mutatedMsg.content || '') + '\n\n' + injectionText.trim();
-                chatContext.chat[userIdx] = mutatedMsg;
-                chatContext.plot_state_injected = true;
-                console.log('[Plot Injection] Appended plot state suffix to the last user message (Chat Completion).');
-            } else {
-                const sysIdx = chatContext.chat.map(m => m.role).lastIndexOf('system');
-                const insertAt = sysIdx === -1 ? 0 : sysIdx + 1;
-                chatContext.chat.splice(insertAt, 0, {
-                    role: 'system',
-                    content: injectionText.trim(),
-                    injected: true,
-                    identifier: 'plot_state_injection'
-                });
-                chatContext.plot_state_injected = true;
-                console.log('[Plot Injection] Fallback: Injected plot state as system message (Chat Completion).');
-            }
-        }
-        // Case 2: Text Generation format (e.g. KoboldAI, TextGenWebUI API)
-        else if (Array.isArray(chatContext.finalMesSend)) {
-            let userIdx = -1;
-            // Attempt 1: Content + Role Match
-            if (lastUserContent) {
-                for (let i = chatContext.finalMesSend.length - 1; i >= 0; i--) {
-                    const m = chatContext.finalMesSend[i];
-                    if ((m.is_user || isUserRole(m.role, userName)) && m.message && m.message.includes(lastUserContent)) {
-                        userIdx = i;
-                        break;
-                    }
-                }
-            }
-            // Attempt 2: Role Match
-            if (userIdx === -1) {
-                for (let i = chatContext.finalMesSend.length - 1; i >= 0; i--) {
-                    const m = chatContext.finalMesSend[i];
-                    if (m.is_user || isUserRole(m.role, userName)) {
-                        userIdx = i;
-                        break;
-                    }
-                }
-            }
-
-            if (userIdx !== -1) {
-                const originalMsg = chatContext.finalMesSend[userIdx];
-                if (originalMsg.message && originalMsg.message.includes(injectionText.trim())) {
-                    chatContext.plot_state_injected = true;
-                    return;
-                }
-                const mutatedMsg = { ...originalMsg };
-                mutatedMsg.message = (mutatedMsg.message || '') + '\n\n' + injectionText.trim();
-                chatContext.finalMesSend[userIdx] = mutatedMsg;
-                chatContext.plot_state_injected = true;
-                console.log('[Plot Injection] Appended plot state suffix to the last user message (TextGen).');
-            } else {
-                if (chatContext.finalMesSend.length > 0) {
-                    const lastIdx = chatContext.finalMesSend.length - 1;
-                    const originalMsg = chatContext.finalMesSend[lastIdx];
-                    if (originalMsg.message && originalMsg.message.includes(injectionText.trim())) {
-                        chatContext.plot_state_injected = true;
-                        return;
-                    }
-                    const mutatedMsg = { ...originalMsg };
-                    mutatedMsg.message = (mutatedMsg.message || '') + '\n\n' + injectionText.trim();
-                    chatContext.finalMesSend[lastIdx] = mutatedMsg;
-                    chatContext.plot_state_injected = true;
-                    console.log('[Plot Injection] Fallback: Appended plot state suffix to the last message (TextGen).');
-                } else {
-                    if (chatContext.main !== undefined) {
-                        if (chatContext.main.includes(injectionText.trim())) {
-                            chatContext.plot_state_injected = true;
-                            return;
-                        }
-                        chatContext.main = (chatContext.main || '') + '\n\n' + injectionText.trim();
-                        chatContext.plot_state_injected = true;
-                        console.log('[Plot Injection] Fallback: Appended plot state to system prompt.');
-                    }
-                }
-            }
-        }
+        setExtensionPrompt(
+            'plot_state_injection',
+            injectionText.trim(),
+            position,
+            depth,
+            false, // scan
+            role
+        );
+        console.log(`[Plot Injection] Registered native ST prompt block. Position: ${position}, Depth: ${depth}, Role: ${role}`);
     } catch (e) {
-        console.warn('[Plot Injection] Could not inject into prompt context:', e);
+        console.warn('[Plot Injection] Failed to set native extension prompt:', e);
     }
 }

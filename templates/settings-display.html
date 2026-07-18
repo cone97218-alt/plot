@@ -63,12 +63,28 @@
                     控制所有模块注入内容合并后的最终格式。使用占位符引用各模块：
                     <br><span style="font-size:0.9em;">关闭的模块对应的整行将被自动删除。</span>
                 </div>
-                <div class="plot-toggle-row" style="display:flex; justify-content:space-between; align-items:center; margin-bottom:10px; background:rgba(0,0,0,0.05); padding:6px 10px; border-radius:4px;">
-                    <span class="plot-label" style="font-weight:normal; font-size:0.85em;">禁用全局注入 (将覆盖并关闭所有模块的注入)</span>
-                    <label class="plot-switch">
-                        <input type="checkbox" id="plot-global-inject-disable-toggle">
-                        <span class="plot-switch-slider"></span>
-                    </label>
+                <div style="display:flex; flex-direction:column; gap:8px; background:rgba(0,0,0,0.05); padding:10px; border-radius:6px; margin-bottom:10px; border:1px solid var(--SmartThemeBorderColor);">
+                    <div style="display:flex; justify-content:space-between; align-items:center; gap:8px;">
+                        <span class="plot-label" style="font-size:0.85em; font-weight:bold;">启用聊天历史注入</span>
+                        <label class="plot-switch">
+                            <input type="checkbox" id="plot-global-inject-enabled-toggle">
+                            <span class="plot-switch-slider"></span>
+                        </label>
+                    </div>
+                    
+                    <div id="plot-global-inject-depth-container" style="display:none; justify-content:space-between; align-items:center; gap:8px; border-top:1px solid rgba(255,255,255,0.05); padding-top:8px;">
+                        <span class="plot-label" style="font-size:0.85em;">注入深度 (Depth)</span>
+                        <input id="plot-global-inject-depth" class="plot-input" type="number" min="0" max="999" value="0" style="width:80px; text-align:center; height:24px; font-size:0.85em;">
+                    </div>
+                    
+                    <div id="plot-global-inject-role-container" style="display:none; justify-content:space-between; align-items:center; gap:8px; border-top:1px solid rgba(255,255,255,0.05); padding-top:8px;">
+                        <span class="plot-label" style="font-size:0.85em;">注入角色 (Role)</span>
+                        <select id="plot-global-inject-role" class="plot-select" style="width:100px; font-size:0.85em; height:26px; padding:0 6px;">
+                            <option value="0">System</option>
+                            <option value="1">User</option>
+                            <option value="2">Assistant</option>
+                        </select>
+                    </div>
                 </div>
                 <textarea
                     id="plot-global-injection-template"
@@ -76,6 +92,9 @@
                     rows="6"
                     style="width:100%; font-family:monospace; font-size:0.85em; resize:vertical;"
                     placeholder="[剧情状态]&#10;{{goals}}&#10;[/剧情状态]"
+                    spellcheck="false"
+                    autocomplete="off"
+                    autocapitalize="off"
                 ></textarea>
                 <div style="display:flex; justify-content:flex-end; margin-top:6px; gap:8px;">
                     <button id="plot-global-inject-reset" class="menu_button plot-btn" style="padding:2px 10px; font-size:0.82em;">

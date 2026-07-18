@@ -450,7 +450,7 @@ export async function renderPromptsTab(containerEl) {
                 <!-- Expandable content editor -->
                 <div class="blk-body" style="display:none; padding:8px;">
                     <textarea class="plot-input blk-ta" rows="5"
-                        style="width:100%; font-family:monospace; font-size:0.82em; background:var(--SmartThemeInputBgColor); color:var(--SmartThemeInputTextColor); border:1px solid var(--SmartThemeInputBorderColor); padding:8px; border-radius:4px; box-sizing:border-box; resize:vertical;"></textarea>
+                        style="width:100%; font-family:monospace; font-size:0.82em; background:var(--SmartThemeInputBgColor); color:var(--SmartThemeInputTextColor); border:1px solid var(--SmartThemeInputBorderColor); padding:8px; border-radius:4px; box-sizing:border-box; resize:vertical;" spellcheck="false" autocomplete="off" autocapitalize="off"></textarea>
                 </div>
             `;
 

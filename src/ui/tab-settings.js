@@ -18,6 +18,7 @@ import { listConnections, saveConnection, deleteConnection, getConnection, fetch
 import { exportPlotData, importPlotData, resetAllPlotData } from '../core/storage.js';
 import { renderTutorial } from './tutorial.js';
 import { renderBookChecklist, subscribeWIRefresh } from '../utils/dom.js';
+import { injectIntoPrompt } from '../core/injection.js';
 
 const MODULE_NAME = 'plot';
 let activeSubTabId = localStorage.getItem('plot_active_settings_sub_tab_id') || 'display';
@@ -53,6 +54,12 @@ async function renderDisplaySubTab(container) {
     if (!settings.panelPosition) settings.panelPosition = 'normal';
     if (!settings.panelSize)     settings.panelSize     = '80%';
     if (!settings.modules)       settings.modules       = {};
+    if (settings.injectionPosition === undefined) settings.injectionPosition = 1;
+    if (settings.injectionPosition !== -1 && settings.injectionPosition !== 1) {
+        settings.injectionPosition = 1;
+    }
+    if (settings.injectionDepth === undefined) settings.injectionDepth = 0;
+    if (settings.injectionRole === undefined) settings.injectionRole = 0;
 
     const DEFAULT_GLOBAL_INJECT_TEMPLATE = '[剧情状态]\n{{goals}}\n[/剧情状态]';
 
@@ -142,15 +149,46 @@ async function renderDisplaySubTab(container) {
         globalTplArea.addEventListener('change', () => {
             settings.globalInjectionTemplate = globalTplArea.value;
             saveSettings();
+            injectIntoPrompt();
         });
 
-        // Bind Disable Toggle
-        const disableToggle = container.querySelector('#plot-global-inject-disable-toggle');
-        if (disableToggle) {
-            disableToggle.checked = settings.injectionEnabled === false;
-            disableToggle.addEventListener('change', () => {
-                settings.injectionEnabled = !disableToggle.checked;
+        // Bind Position, Depth, Role Settings
+        const enabledToggle = container.querySelector('#plot-global-inject-enabled-toggle');
+        const depthContainer = container.querySelector('#plot-global-inject-depth-container');
+        const roleContainer = container.querySelector('#plot-global-inject-role-container');
+        const depthInput = container.querySelector('#plot-global-inject-depth');
+        const roleSelect = container.querySelector('#plot-global-inject-role');
+
+        if (enabledToggle && depthContainer && roleContainer && depthInput && roleSelect) {
+            enabledToggle.checked = settings.injectionPosition === 1;
+            depthInput.value = settings.injectionDepth;
+            roleSelect.value = settings.injectionRole;
+
+            const updateVisibility = () => {
+                const isEnabled = enabledToggle.checked;
+                depthContainer.style.display = isEnabled ? 'flex' : 'none';
+                roleContainer.style.display = isEnabled ? 'flex' : 'none';
+            };
+            
+            updateVisibility();
+
+            enabledToggle.addEventListener('change', () => {
+                settings.injectionPosition = enabledToggle.checked ? 1 : -1;
+                updateVisibility();
                 saveSettings();
+                injectIntoPrompt();
+            });
+
+            depthInput.addEventListener('change', () => {
+                settings.injectionDepth = Math.max(0, Number(depthInput.value) || 0);
+                saveSettings();
+                injectIntoPrompt();
+            });
+
+            roleSelect.addEventListener('change', () => {
+                settings.injectionRole = Number(roleSelect.value);
+                saveSettings();
+                injectIntoPrompt();
             });
         }
 
@@ -159,6 +197,7 @@ async function renderDisplaySubTab(container) {
             settings.globalInjectionTemplate = DEFAULT_GLOBAL_INJECT_TEMPLATE;
             globalTplArea.value = DEFAULT_GLOBAL_INJECT_TEMPLATE;
             saveSettings();
+            injectIntoPrompt();
         });
     }
 }
@@ -564,7 +603,7 @@ async function renderReadingSubTab(container) {
 
         // Bind events
         listContainer.querySelectorAll('.plot-regex-name').forEach(el => {
-            el.addEventListener('input', () => {
+            el.addEventListener('change', () => {
                 rules[Number(el.dataset.idx)].name = el.value.trim();
                 saveSettings();
             });
@@ -577,13 +616,13 @@ async function renderReadingSubTab(container) {
             });
         });
         listContainer.querySelectorAll('.plot-regex-find').forEach(el => {
-            el.addEventListener('input', () => {
+            el.addEventListener('change', () => {
                 rules[Number(el.dataset.idx)].find = el.value.trim();
                 saveSettings();
             });
         });
         listContainer.querySelectorAll('.plot-regex-replace').forEach(el => {
-            el.addEventListener('input', () => {
+            el.addEventListener('change', () => {
                 rules[Number(el.dataset.idx)].replace = el.value.trim();
                 saveSettings();
             });

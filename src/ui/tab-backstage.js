@@ -1244,10 +1244,15 @@ function initChatInterface() {
         bindMessageActionsDelegated(dialogueArea);
     }
 
-    // Autoresize input area height
+    // Autoresize input area height with requestAnimationFrame throttling
+    let resizeRAF = null;
     inputArea.addEventListener('input', () => {
-        inputArea.style.height = 'auto';
-        inputArea.style.height = (inputArea.scrollHeight - 4) + 'px';
+        if (resizeRAF) return;
+        resizeRAF = requestAnimationFrame(() => {
+            inputArea.style.height = 'auto';
+            inputArea.style.height = (inputArea.scrollHeight - 4) + 'px';
+            resizeRAF = null;
+        });
     });
 
     // Send on click
