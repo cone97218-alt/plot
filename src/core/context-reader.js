@@ -333,8 +333,11 @@ export async function buildContext(overrides = {}) {
     const lastUserMsg = backstageMessages.slice().reverse().find(m => m.role === 'user');
     const btsUserInput = lastUserMsg?.content || '';
 
+    const charName = ctx.name2 || 'Assistant';
+    const userName = ctx.name1 || 'User';
+
     const btsChatHistory = backstageMessages.map(m => {
-        const sender = m.sender || (m.role === 'user' ? 'User' : 'Assistant');
+        const sender = m.sender || (m.role === 'user' ? userName : charName);
         const content = m.content || '';
         return `${sender}: ${content}`;
     }).join('\n');
