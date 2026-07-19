@@ -17,6 +17,8 @@ let rootEl = null;
 let currentAbortController = null;
 let currentBtsReloadWI = null;
 let _btsWiUnsubscribe = null; // tracks the active WI event subscription (replaces isBtsEventBound)
+let _btsStoreUnsubscribe = null;
+let _btsLoadingStoreUnsubscribe = null;
 
 // Helper to escape HTML tags for safe markdown preprocessing
 function escapeHtml(text) {
@@ -90,8 +92,19 @@ export async function renderBackstageTab(containerEl) {
     initUnifiedConfigDrawer();
 
     // Subscribe to store updates to keep UI synchronized
-    subscribe('backstageHistory', () => {
+    if (_btsStoreUnsubscribe) _btsStoreUnsubscribe();
+    _btsStoreUnsubscribe = subscribe('backstageHistory', () => {
+        if (get('isLoading')) return;
         renderDialogue();
+    });
+
+    if (_btsLoadingStoreUnsubscribe) _btsLoadingStoreUnsubscribe();
+    _btsLoadingStoreUnsubscribe = subscribe('isLoading', (loading) => {
+        if (loading) {
+            showBtsLoading();
+        } else {
+            renderDialogue();
+        }
     });
 
     // Initial render of dialogue history
@@ -1315,9 +1328,26 @@ function getDialogueAvatars() {
     return { user: userAvatarUrl, bot: charAvatarUrl };
 }
 
+function showBtsLoading() {
+    const dialogueArea = rootEl?.querySelector('#plot-bts-dialogue-area');
+    if (dialogueArea) {
+        dialogueArea.innerHTML = `
+            <div style="flex:1; display:flex; align-items:center; justify-content:center; flex-direction:column; opacity:0.6; padding:30px;">
+                <div class="plot-spinner" style="width:30px; height:30px; border-width:3px; margin-bottom:12px;"></div>
+                <div style="font-size:0.85em; opacity:0.8;">正在加载对话数据...</div>
+            </div>
+        `;
+    }
+}
+
 function renderDialogue() {
     const dialogueArea = rootEl.querySelector('#plot-bts-dialogue-area');
     if (!dialogueArea) return;
+
+    if (get('isLoading')) {
+        showBtsLoading();
+        return;
+    }
 
     const messages = get('backstageHistory') || [];
 

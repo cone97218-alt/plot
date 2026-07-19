@@ -3,7 +3,7 @@ import { saveSettings } from '../../../../../../script.js';
 import { migrate } from './migrator.js';
 import { set, get } from './store.js';
 import { getPlotValue, savePlotValue, clearAllPlotDB } from './indexeddb.js';
-import { registerDynamicVariableMacros } from '../utils/macro.js';
+import { registerDynamicVariableMacros, registerDynamicCategoryMacros } from '../utils/macro.js';
 import { injectIntoPrompt } from './injection.js';
 
 /**
@@ -36,6 +36,7 @@ export function getBtsDBKey(overrideModeId, overrideThreadId) {
 }
 
 export async function loadPlotData() {
+    set('isLoading', true);
     const ctx = getContext();
     
     // Ensure global settings exist
@@ -148,14 +149,20 @@ export async function loadPlotData() {
         }
     }
     
-    // 2. Load active progress from IndexedDB (or fallback and migrate from chatMetadata if present)
+    // 2. Load active progress from IndexedDB in parallel
     const varKey = `active_vars_${chId}_${chatId}`;
     const goalKey = `active_goals_${chId}_${chatId}`;
     const storylineKey = `active_storylines_${chId}_${chatId}`;
+    const pinKey = `pinned_goals_${chId}_${chatId}`;
+    const dbKey = getBtsDBKey();
 
-    let activeVars = await getPlotValue(varKey);
-    let activeGoals = await getPlotValue(goalKey);
-    let activeStorylines = await getPlotValue(storylineKey);
+    let [activeVars, activeGoals, activeStorylines, pinnedGoalIds, backstageHistory] = await Promise.all([
+        getPlotValue(varKey),
+        getPlotValue(goalKey),
+        getPlotValue(storylineKey),
+        getPlotValue(pinKey),
+        getPlotValue(dbKey)
+    ]);
 
     // Merge Chat-level progress & migrate if present in chatMetadata
     let oldChatBtsHistory = null;
@@ -204,16 +211,12 @@ export async function loadPlotData() {
     plotData.goals = activeGoals;
     plotData.storylines = activeStorylines;
 
-    const pinKey = `pinned_goals_${chId}_${chatId}`;
-    let pinnedGoalIds = await getPlotValue(pinKey);
     if (!Array.isArray(pinnedGoalIds)) {
         pinnedGoalIds = [];
     }
     set('pinnedGoalIds', pinnedGoalIds);
 
-    // 3. Load Backstage History from IndexedDB
-    const dbKey = getBtsDBKey();
-    let backstageHistory = await getPlotValue(dbKey);
+    // 3. Load Backstage History from IndexedDB (already loaded in parallel)
     
     // Auto-migration check: If IndexedDB is empty, but we have old legacy history, migrate it!
     if (!backstageHistory || Object.keys(backstageHistory).length === 0) {
@@ -275,6 +278,8 @@ export async function loadPlotData() {
     set('backstageHistory', plotData.backstageHistory);
     set('backstageHistoryLoadedKey', dbKey);
     registerDynamicVariableMacros();
+    registerDynamicCategoryMacros();
+    set('isLoading', false);
 }
 
 export async function savePlotData() {

@@ -24,6 +24,7 @@ const foldedGoalIds = new Set();
 // listeners are only attached once, preventing accumulation across tab re-renders.
 let _goalsEventsBound = false;
 let _goalsStoreUnsubscribe = null;
+let _goalsLoadingStoreUnsubscribe = null;
 
 // Helper to escape HTML safely
 function escapeHtml(text) {
@@ -36,26 +37,101 @@ function escapeHtml(text) {
 }
 
 // Helper to format complex values (objects, arrays) nicely for display in badge capsules
-function formatValueForDisplay(val) {
+function formatValueForDisplay(val, depth = 0) {
     if (val === undefined || val === null) return '';
+    
+    // Primitives
+    if (typeof val !== 'object') {
+        return String(val);
+    }
+    
+    // Arrays
     if (Array.isArray(val)) {
-        return val.map(formatValueForDisplay).join(', ');
-    }
-    if (typeof val === 'object') {
-        try {
-            const parts = Object.entries(val)
-                .filter(([_, v]) => v !== undefined && v !== null && v !== '')
-                .map(([k, v]) => {
-                    const cleanK = k === 'item' ? '物品' : (k === 'favorability' ? '好感度' : (k === 'pre' ? '前置' : (k === 'next' ? '后续' : k)));
-                    const cleanV = typeof v === 'object' ? JSON.stringify(v) : String(v);
-                    return `${cleanK}: ${cleanV}`;
-                });
-            return parts.length > 0 ? parts.join(', ') : JSON.stringify(val);
-        } catch (_) {
-            return JSON.stringify(val);
+        if (val.length === 0) return '无';
+        
+        // Check if it's an array of objects
+        const isArrayOfObjects = val.every(item => typeof item === 'object' && item !== null);
+        if (isArrayOfObjects) {
+            return val.map(item => {
+                const name = item.name || item.title || '';
+                const desc = item.description || item.desc || '';
+                if (name && desc) {
+                    return `【${name}】${desc}`;
+                } else if (name) {
+                    return `【${name}】`;
+                } else {
+                    return formatValueForDisplay(item, depth + 1);
+                }
+            }).join(' | ');
         }
+        
+        // Array of primitives
+        const formattedItems = val.map(v => formatValueForDisplay(v, depth + 1));
+        return `[${formattedItems.join(', ')}]`;
     }
-    return String(val);
+    
+    // Objects
+    const dict = {
+        hp: '生命值',
+        mp: '魔法值',
+        atk: '攻击力',
+        def: '防御力',
+        armor: '防具',
+        weapon: '武器',
+        accessory: '饰品',
+        strengths: '特长/优势',
+        weaknesses: '弱点/劣势',
+        name: '名称',
+        description: '描述',
+        item: '物品',
+        favorability: '好感度',
+        pre: '前置',
+        next: '后续',
+        reward: '奖励',
+        rewards: '奖励',
+        clue: '线索'
+    };
+    
+    const translateKey = (k) => dict[k.toLowerCase()] || k;
+    
+    // Range/Progress check
+    const hasCurrent = val.hasOwnProperty('current') || val.hasOwnProperty('value');
+    const hasMax = val.hasOwnProperty('max');
+    if (hasCurrent && hasMax) {
+        const cur = val.current !== undefined ? val.current : val.value;
+        return `${cur}/${val.max}`;
+    }
+    
+    try {
+        const parts = Object.entries(val)
+            .filter(([_, v]) => v !== undefined && v !== null && v !== '')
+            .map(([k, v]) => {
+                const cleanK = translateKey(k);
+                
+                // Format value recursively
+                let cleanV = '';
+                if (typeof v === 'object' && v !== null) {
+                    cleanV = formatValueForDisplay(v, depth + 1);
+                } else {
+                    cleanV = String(v);
+                    if (typeof v === 'number' && v > 0) {
+                        cleanV = `+${v}`;
+                    }
+                }
+                
+                // If nested value is numeric, omit the colon or display nicely
+                if (typeof v === 'number') {
+                    return `${cleanK} ${cleanV}`;
+                }
+                return `${cleanK}: ${cleanV}`;
+            });
+            
+        // Use different delimiters based on nesting depth to distinguish levels
+        const delimiter = depth === 0 ? ' | ' : ', ';
+        return parts.length > 0 ? parts.join(delimiter) : JSON.stringify(val);
+    } catch (_) {
+        return JSON.stringify(val);
+    }
 }
 
 export async function renderGoalsTab(containerEl) {
@@ -345,20 +421,45 @@ export async function renderGoalsTab(containerEl) {
 
         document.addEventListener('plot:storeUpdated', async () => {
             if (isSelfUpdatingGoalStatus) return;
+            if (get('isLoading')) return;
             if (document.getElementById('plot-goals-tree-container')) {
                 await rebuildFilterTabs(true);
                 renderGoalTreeUI();
             }
         });
+
+        // ── 7. Chat Change / Selection listener (Moved inside single binding check to prevent leak) ──
+        const ctx = getContext();
+        if (ctx && ctx.eventSource && ctx.eventTypes) {
+            ctx.eventSource.on(ctx.eventTypes.CHAT_CHANGED, async () => {
+                if (document.getElementById('plot-goals-tree-container')) {
+                    await refreshModeSelector();
+                    renderGoalTreeUI();
+                }
+            });
+        }
     }
 
     // B14 Fix: cancel any previous store subscription before registering a new one
     if (_goalsStoreUnsubscribe) _goalsStoreUnsubscribe();
     _goalsStoreUnsubscribe = subscribe('goals', async () => {
         if (isSelfUpdatingGoalStatus) return;
+        if (get('isLoading')) return;
         if (document.getElementById('plot-goals-tree-container')) {
             await rebuildFilterTabs(true);
             renderGoalTreeUI();
+        }
+    });
+
+    if (_goalsLoadingStoreUnsubscribe) _goalsLoadingStoreUnsubscribe();
+    _goalsLoadingStoreUnsubscribe = subscribe('isLoading', async (loading) => {
+        if (loading) {
+            showGoalsLoading();
+        } else {
+            if (document.getElementById('plot-goals-tree-container')) {
+                await rebuildFilterTabs(true);
+                renderGoalTreeUI();
+            }
         }
     });
     
@@ -523,16 +624,7 @@ export async function renderGoalsTab(containerEl) {
         getContext().saveSettingsDebounced?.();
     });
 
-    // ── 7. Chat Change / Selection listener ──
-    const ctx = getContext();
-    if (ctx && ctx.eventSource && ctx.eventTypes) {
-        ctx.eventSource.on(ctx.eventTypes.CHAT_CHANGED, async () => {
-            if (document.getElementById('plot-goals-tree-container')) {
-                await refreshModeSelector();
-                renderGoalTreeUI();
-            }
-        });
-    }
+    // ── 7. Chat Change / Selection listener (moved to single-binding guard) ──
 
     // Initial Render
     await refreshModeSelector();
@@ -724,7 +816,19 @@ function buildGoalNodeDOM(goal, goalsMap, displayCfg = { showDesc: false, showSt
                     
                     const globalBadges = getContext().extensionSettings?.plot?.customBadges || {};
                     const configEntry = globalBadges[k];
-                    const labelMap = { reward: '奖励', rewards: '奖励', awards: '奖励', innerVoice: '心声', exp: '经验', clue: '线索' };
+                    const labelMap = { 
+                        reward: '奖励', 
+                        rewards: '奖励', 
+                        awards: '奖励', 
+                        innerVoice: '心声', 
+                        exp: '经验', 
+                        clue: '线索',
+                        durability: '耐久',
+                        value: '数值',
+                        baseStats: '基础属性',
+                        stats: '属性',
+                        category: '类别'
+                    };
                     const label = configEntry?.label || labelMap[k] || k;
                     
                     let badgeColor = configEntry?.color || 'var(--SmartThemeEmColor)';
@@ -894,6 +998,18 @@ function extractJsonArray(text) {
 // promise chain kept all previous closures alive.
 let _renderGoalTreeTimer = null;
 
+function showGoalsLoading() {
+    const container = rootEl?.querySelector('#plot-goals-tree-container');
+    if (container) {
+        container.innerHTML = `
+            <div style="text-align:center; padding:30px; opacity:0.6;">
+                <div class="plot-spinner" style="width:24px; height:24px; border-width:2px; margin-bottom:8px;"></div>
+                <div style="font-size:0.85em; opacity:0.8;">正在加载目标数据...</div>
+            </div>
+        `;
+    }
+}
+
 function renderGoalTreeUI() {
     if (_renderGoalTreeTimer) clearTimeout(_renderGoalTreeTimer);
     _renderGoalTreeTimer = setTimeout(async () => {
@@ -901,6 +1017,11 @@ function renderGoalTreeUI() {
         try {
         const container = rootEl?.querySelector('#plot-goals-tree-container');
         if (!container) return;
+        
+        if (get('isLoading')) {
+            showGoalsLoading();
+            return;
+        }
         
         const goals = get('goals') || {};
         const goalList = Object.values(goals).filter(g => !g.deleted);
@@ -1023,27 +1144,27 @@ function renderGoalTreeUI() {
 
 function buildGridLayout(goalList, goalsMap, displayCfg, showFields) {
     const wrapper = document.createElement('div');
-    wrapper.style.cssText = 'display:grid; grid-template-columns: repeat(auto-fill, minmax(130px, 1fr)); gap:10px; width:100%; box-sizing:border-box;';
+    wrapper.className = 'plot-achievement-grid';
     
     goalList.forEach(goal => {
         const isComplete = goal.status === 'complete';
         const isLocked = goal.status === 'locked';
         const isFailed = goal.status === 'failed';
+        const isActive = goal.status === 'active' || !goal.status;
+        const isUnlocked = goal.status === 'unlocked';
         
         const card = document.createElement('div');
-        card.style.cssText = `
-            display:flex; flex-direction:column; align-items:center; justify-content:flex-start;
-            padding:10px 8px; border-radius:8px; text-align:center; cursor:pointer; gap:6px;
-            border:2px solid ${isComplete ? 'var(--SmartThemeEmColor)' : 'var(--SmartThemeBorderColor)'};
-            background:${isComplete ? 'rgba(var(--SmartThemeEmColor-rgb,150,120,255),0.08)' : 'rgba(0,0,0,0.15)'};
-            filter:${(isLocked || isFailed) ? 'grayscale(0.7) opacity(0.55)' : 'none'};
-            box-shadow:${isComplete ? '0 0 10px rgba(var(--SmartThemeEmColor-rgb,150,120,255),0.25)' : 'none'};
-            transition: all 0.2s ease; position:relative; overflow:hidden; box-sizing:border-box;
-        `;
+        card.className = 'plot-achievement-card';
+        if (isComplete) card.classList.add('is-complete');
+        if (isFailed) card.classList.add('is-failed');
+        if (isLocked) card.classList.add('is-locked');
+        if (isActive) card.classList.add('is-active');
+        if (isUnlocked) card.classList.add('is-unlocked');
         card.dataset.id = goal.id;
         
         // Status / Custom icon
         const iconEl = document.createElement('div');
+        iconEl.className = 'plot-achievement-icon';
         let iconClass = '';
         if (goal.icon && String(goal.icon).trim() !== '') {
             iconClass = String(goal.icon).trim().includes('fa-') ? String(goal.icon).trim() : `fa-solid fa-${String(goal.icon).trim()}`;
@@ -1051,25 +1172,40 @@ function buildGridLayout(goalList, goalsMap, displayCfg, showFields) {
             const statusIconMap = { complete: 'fa-solid fa-star', failed: 'fa-solid fa-xmark', locked: 'fa-solid fa-lock', hidden: 'fa-solid fa-eye-slash', active: 'fa-solid fa-bolt', unlocked: 'fa-regular fa-circle' };
             iconClass = statusIconMap[goal.status] || statusIconMap.active;
         }
-        iconEl.style.cssText = `font-size:1.6em; color:${isComplete ? 'var(--SmartThemeEmColor)' : 'var(--SmartThemeBodyColor)'}; margin-bottom:2px;`;
         iconEl.innerHTML = `<i class="${iconClass}"></i>`;
         card.appendChild(iconEl);
         
         // Title
         const titleEl = document.createElement('div');
-        titleEl.style.cssText = 'font-size:0.8em; font-weight:bold; line-height:1.2; word-break:break-word;';
+        titleEl.className = 'plot-achievement-title';
         titleEl.textContent = goal.title;
         card.appendChild(titleEl);
         
         // Custom fields
         if (showFields.length > 0 && !isLocked) {
             const badgesEl = document.createElement('div');
-            badgesEl.style.cssText = 'display:flex; flex-wrap:wrap; justify-content:center; gap:3px; margin-top:2px;';
+            badgesEl.className = 'plot-achievement-badges';
+            
+            const labelMap = { 
+                reward: '奖励', 
+                rewards: '奖励', 
+                awards: '奖励', 
+                innerVoice: '心声', 
+                exp: '经验', 
+                clue: '线索',
+                durability: '耐久',
+                value: '数值',
+                baseStats: '基础属性',
+                stats: '属性',
+                category: '类别'
+            };
+            
             showFields.forEach(key => {
                 if (goal[key] !== undefined && goal[key] !== null && String(goal[key]).trim() !== '') {
                     const b = document.createElement('span');
-                    b.style.cssText = 'font-size:0.68em; background:rgba(255,255,255,0.08); border-radius:3px; padding:1px 4px; opacity:0.8;';
-                    b.textContent = `${key}: ${formatValueForDisplay(goal[key])}`;
+                    b.className = 'plot-achievement-badge-pill';
+                    const displayLabel = labelMap[key] || key;
+                    b.textContent = `${displayLabel}: ${formatValueForDisplay(goal[key])}`;
                     badgesEl.appendChild(b);
                 }
             });
@@ -1077,9 +1213,6 @@ function buildGridLayout(goalList, goalsMap, displayCfg, showFields) {
         }
         
         card.addEventListener('click', () => openConfigDrawer(goal.id));
-        card.addEventListener('mouseenter', () => { if (!isLocked && !isFailed) card.style.transform = 'translateY(-2px)'; });
-        card.addEventListener('mouseleave', () => { card.style.transform = ''; });
-        
         wrapper.appendChild(card);
     });
     

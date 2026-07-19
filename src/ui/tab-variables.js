@@ -327,12 +327,22 @@ export async function renderVariablesTab(containerEl) {
 
     // ── 5. Subscribe to Store updates ──
     const unsubscribe = subscribe('variables', () => {
+        if (get('isLoading')) return;
         renderVariablesList();
+    });
+
+    const unsubscribeLoading = subscribe('isLoading', (loading) => {
+        if (loading) {
+            showVariablesLoading();
+        } else {
+            renderVariablesList();
+        }
     });
 
     const observer = new MutationObserver((mutations, obs) => {
         if (!document.body.contains(containerEl)) {
             unsubscribe();
+            unsubscribeLoading();
             obs.disconnect();
         }
     });
@@ -452,9 +462,26 @@ function refreshDefaultValueInput(type, initialVal = '') {
 /**
  * Render all variables in a compact status-bar HUD list
  */
+function showVariablesLoading() {
+    const cardContainer = rootEl?.querySelector('#plot-variables-card-container');
+    if (cardContainer) {
+        cardContainer.innerHTML = `
+            <div style="text-align:center; padding:30px; opacity:0.6;">
+                <div class="plot-spinner" style="width:24px; height:24px; border-width:2px; margin-bottom:8px;"></div>
+                <div style="font-size:0.85em; opacity:0.8;">正在加载变量数据...</div>
+            </div>
+        `;
+    }
+}
+
 function renderVariablesList() {
     const cardContainer = rootEl.querySelector('#plot-variables-card-container');
     if (!cardContainer) return;
+
+    if (get('isLoading')) {
+        showVariablesLoading();
+        return;
+    }
 
     const vars = { ...(get('variables') || {}) };
 

@@ -935,8 +935,8 @@
 
 /* Minimalist pill badges */
 .plot-goal-badge {
-    font-size: 0.7em;
-    padding: 1px 6px;
+    font-size: 0.75em;
+    padding: 2px 6px;
     border-radius: 4px;
     background: var(--SmartThemeChatTintColor);
     border: 1px solid var(--SmartThemeBorderColor);
@@ -945,7 +945,7 @@
     display: inline-flex;
     align-items: center;
     gap: 3px;
-    opacity: 0.75;
+    opacity: 0.85;
 }
 
 /* Type badge */
@@ -1043,6 +1043,132 @@
 
 .plot-goal-action-btn.is-pinned i {
     color: var(--SmartThemeEmColor) !important;
+}
+
+/* ── Achievement Grid Layout (RPG mode) ── */
+.plot-achievement-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(130px, 1fr));
+    gap: 10px;
+    width: 100%;
+    box-sizing: border-box;
+}
+
+.plot-achievement-card {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: flex-start;
+    padding: 10px 8px;
+    border-radius: 8px;
+    text-align: center;
+    cursor: pointer;
+    gap: 6px;
+    border: 2px solid var(--SmartThemeBorderColor);
+    background: rgba(var(--SmartThemeChatTintColor-rgb, 0, 0, 0), 0.25);
+    transition: all 0.2s ease;
+    position: relative;
+    overflow: hidden;
+    box-sizing: border-box;
+}
+
+.plot-achievement-card:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 4px 10px rgba(0, 0, 0, 0.2);
+    border-color: var(--SmartThemeEmColor);
+}
+
+/* Complete state */
+.plot-achievement-card.is-complete {
+    border-color: var(--SmartThemeUnderlineColor);
+    background: rgba(var(--SmartThemeUnderlineColor-rgb, 76, 175, 80), 0.1);
+    box-shadow: 0 0 10px rgba(var(--SmartThemeUnderlineColor-rgb, 76, 175, 80), 0.25);
+}
+
+.plot-achievement-card.is-complete .plot-achievement-icon {
+    color: var(--SmartThemeUnderlineColor) !important;
+}
+
+.plot-achievement-card.is-complete .plot-achievement-title {
+    text-decoration: line-through;
+    opacity: 0.65;
+}
+
+/* Failed state */
+.plot-achievement-card.is-failed {
+    border-color: var(--SmartThemeQuoteColor);
+    background: rgba(var(--SmartThemeQuoteColor-rgb, 255, 75, 75), 0.05);
+    opacity: 0.75;
+}
+
+.plot-achievement-card.is-failed .plot-achievement-icon {
+    color: var(--SmartThemeQuoteColor) !important;
+}
+
+.plot-achievement-card.is-failed .plot-achievement-title {
+    color: var(--SmartThemeQuoteColor);
+}
+
+/* Locked state */
+.plot-achievement-card.is-locked {
+    opacity: 0.45;
+    filter: grayscale(0.8);
+    cursor: default;
+    border-color: rgba(var(--SmartThemeBorderColor-rgb, 128, 128, 128), 0.5);
+    background: rgba(0, 0, 0, 0.08);
+}
+
+.plot-achievement-card.is-locked:hover {
+    transform: none;
+    box-shadow: none;
+    border-color: rgba(var(--SmartThemeBorderColor-rgb, 128, 128, 128), 0.5);
+}
+
+.plot-achievement-card.is-locked .plot-achievement-title {
+    font-style: italic;
+    opacity: 0.7;
+}
+
+/* Icon */
+.plot-achievement-icon {
+    font-size: 1.6em;
+    color: var(--SmartThemeBodyColor);
+    margin-bottom: 2px;
+    transition: color 0.2s ease;
+}
+
+.plot-achievement-card.is-active .plot-achievement-icon,
+.plot-achievement-card.is-unlocked .plot-achievement-icon {
+    color: var(--SmartThemeEmColor);
+}
+
+/* Title */
+.plot-achievement-title {
+    font-size: 0.8em;
+    font-weight: bold;
+    line-height: 1.2;
+    word-break: break-word;
+    color: var(--SmartThemeBodyColor);
+}
+
+/* Badges */
+.plot-achievement-badges {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: center;
+    gap: 3px;
+    margin-top: 2px;
+}
+
+.plot-achievement-badge-pill {
+    font-size: 0.7em;
+    background: rgba(var(--SmartThemeChatTintColor-rgb, 0, 0, 0), 0.4);
+    border: 1px solid var(--SmartThemeBorderColor);
+    border-radius: 4px;
+    padding: 2px 6px;
+    opacity: 0.85;
+    color: var(--SmartThemeBodyColor);
+    white-space: nowrap;
 }
 
 

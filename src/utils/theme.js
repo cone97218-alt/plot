@@ -1,4 +1,4 @@
-﻿export function getThemeRgb(variableName) {
+export function getThemeRgb(variableName) {
     const tempDiv = document.createElement('div');
     tempDiv.style.color = `var(${variableName})`;
     document.body.appendChild(tempDiv);
@@ -17,7 +17,11 @@ export function injectThemeRgbVariables() {
         '--SmartThemeBlurTintColor',
         '--SmartThemeChatTintColor',
         '--SmartThemeUserMesBlurTintColor',
-        '--SmartThemeBotMesBlurTintColor'
+        '--SmartThemeBotMesBlurTintColor',
+        '--SmartThemeEmColor',
+        '--SmartThemeUnderlineColor',
+        '--SmartThemeQuoteColor',
+        '--SmartThemeBorderColor'
     ];
     const root = document.documentElement;
     variables.forEach(varName => {

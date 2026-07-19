@@ -16,7 +16,7 @@
 import { macros, MacroCategory } from '../../../../../macros/macro-system.js';
 import { MacrosParser } from '../../../../../macros.js';
 import { get } from '../core/store.js';
-import { getInjectionMacros, formatVariableLine } from '../core/injection.js';
+import { getInjectionMacros, formatVariableLine, formatGoalLine } from '../core/injection.js';
 import { serializeComplexInline, formatComplexValue } from '../core/serializers.js';
 
 const MACRO_PREFIX = 'plot';
@@ -211,19 +211,91 @@ export function registerMacros() {
             });
 
             const m = getInjectionMacros();
-            result = result
-                .replace(/\{\{plot_state\}\}/gi,     m.plot_state)
-                .replace(/\{\{plot_variables\}\}/gi,  m.plot_variables)
-                .replace(/\{\{plot_goals\}\}/gi,      m.plot_goals)
-                .replace(/\{\{plot_goals_active\}\}/gi,  m.plot_goals_active)
-                .replace(/\{\{plot_goals_complete\}\}/gi,m.plot_goals_complete)
-                .replace(/\{\{plot_goals_failed\}\}/gi,  m.plot_goals_failed)
-                .replace(/\{\{plot_goals_hidden\}\}/gi,  m.plot_goals_hidden)
-                .replace(/\{\{plot_goals_all\}\}/gi,     m.plot_goals_all)
-                .replace(/\{\{plot_storyline\}\}/gi,  m.plot_storyline);
+            // Dynamically replace all macros defined in m, covering static and dynamic categories
+            Object.keys(m).forEach(macroKey => {
+                const regex = new RegExp(`\\{\\{${macroKey}\\}\\}`, 'gi');
+                result = result.replace(regex, m[macroKey] || '');
+            });
+
+            // Fallback dynamic regex parsing for category-status macros: {{plot_[category]_[status]}}
+            result = result.replace(/\{\{plot_([a-zA-Z0-9_]+?)_([a-zA-Z0-9_]+?)\}\}/gi, (match, categoryRaw, statusRaw) => {
+                const category = categoryRaw.toLowerCase();
+                const status = statusRaw.toLowerCase();
+                if (category === 'var') return match; // Handled by variable macro regex
+
+                const staticMacros = ['state', 'variables', 'goals', 'storyline'];
+                if (staticMacros.includes(category) && !statusRaw) return match;
+
+                const macroKey = `plot_${category}_${status}`;
+                if (m.hasOwnProperty(macroKey)) {
+                    return m[macroKey];
+                }
+
+                // Calculate on the fly for unregistered category/status combinations
+                const goals = get('goals') || {};
+                const goalList = Object.values(goals);
+                const pinnedIds = get('pinnedGoalIds') || [];
+                const goalInject = ctx.extensionSettings?.plot?.goalInjection || {};
+                const lineTemplate = goalInject.lineTemplate || "【{{title}}】{{desc}}";
+
+                const catSingular = category.endsWith('s') ? category.slice(0, -1) : category;
+                const filtered = goalList.filter(g => {
+                    const goalCat = String(g.category || '').trim().toLowerCase();
+                    const goalCatSingular = goalCat.endsWith('s') ? goalCat.slice(0, -1) : goalCat;
+                    return (goalCat === category || goalCatSingular === catSingular) &&
+                           (g.status === status || (status === 'active' && !g.status));
+                });
+
+                return filtered.map(g => formatGoalLine(g, lineTemplate)).filter(Boolean).join('\n');
+            });
 
             return originalSubstituteParams(result, ...args);
         };
         console.log('[Plot Macros] Patching substituteParams for regular expression dynamic macro mapping.');
+    }
+}
+
+/**
+ * Dynamically register macros natively in ST's modern system for each current category.
+ */
+export function registerDynamicCategoryMacros() {
+    const ctx = globalThis.SillyTavern?.getContext?.();
+    if (!ctx) return;
+
+    if (macros && typeof macros.register === 'function') {
+        const goals = get('goals') || {};
+        const uniqueCategories = new Set();
+        Object.values(goals).forEach(g => {
+            if (g.category && String(g.category).trim() !== '') {
+                uniqueCategories.add(String(g.category).trim().toLowerCase());
+            }
+        });
+
+        const statuses = ['locked', 'unlocked', 'active', 'complete', 'failed', 'hidden'];
+        const goalInject = ctx.extensionSettings?.plot?.goalInjection || {};
+        const lineTemplate = goalInject.lineTemplate || "【{{title}}】{{desc}}";
+
+        uniqueCategories.forEach(cat => {
+            const catSingular = cat;
+            const normalizedPlural = cat.endsWith('s') ? cat : cat + 's';
+
+            statuses.forEach(status => {
+                const keySingular = `plot_${catSingular}_${status}`;
+                const keyPlural = `plot_${normalizedPlural}_${status}`;
+
+                try {
+                    macros.register(keySingular, {
+                        category: MacroCategory.CHAT,
+                        description: `Plot dynamic category ${catSingular} status: ${status}`,
+                        handler: () => getInjectionMacros()[keySingular] || ''
+                    });
+                    macros.register(keyPlural, {
+                        category: MacroCategory.CHAT,
+                        description: `Plot dynamic category ${normalizedPlural} status: ${status}`,
+                        handler: () => getInjectionMacros()[keyPlural] || ''
+                    });
+                } catch (e) {}
+            });
+        });
     }
 }

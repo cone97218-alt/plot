@@ -15,6 +15,7 @@ const _state = {
     backstageStorageScope: 'chat',
     backstageHistory: [],
     pinnedGoalIds: [],
+    isLoading: false,
 };
 
 const _subscribers = new Map();
