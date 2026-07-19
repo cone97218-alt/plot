@@ -15,8 +15,10 @@ import { getBlockContent, getBlocks, assemblePrompt } from '../core/prompt-build
 
 let rootEl = null;
 let activeFilter = 'active'; // 'active' | 'complete' | 'failed' | 'all'
+let activeRpgCategoryFilter = null; // null = all categories; set to a category string when in RPG mode
 let actionRowCompilers = []; // tracks functions to parse action configs in drawer
 let isSelfUpdatingGoalStatus = false; // flag to optimize checkbox toggles and prevent full tree rebuilds
+const foldedGoalIds = new Set();
 
 // B2/B14 Fix: module-level registration flags so that document-level and store
 // listeners are only attached once, preventing accumulation across tab re-renders.
@@ -28,7 +30,32 @@ function escapeHtml(text) {
     return String(text || '')
         .replace(/&/g, '&amp;')
         .replace(/</g, '&lt;')
-        .replace(/>/g, '&gt;');
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#39;');
+}
+
+// Helper to format complex values (objects, arrays) nicely for display in badge capsules
+function formatValueForDisplay(val) {
+    if (val === undefined || val === null) return '';
+    if (Array.isArray(val)) {
+        return val.map(formatValueForDisplay).join(', ');
+    }
+    if (typeof val === 'object') {
+        try {
+            const parts = Object.entries(val)
+                .filter(([_, v]) => v !== undefined && v !== null && v !== '')
+                .map(([k, v]) => {
+                    const cleanK = k === 'item' ? '物品' : (k === 'favorability' ? '好感度' : (k === 'pre' ? '前置' : (k === 'next' ? '后续' : k)));
+                    const cleanV = typeof v === 'object' ? JSON.stringify(v) : String(v);
+                    return `${cleanK}: ${cleanV}`;
+                });
+            return parts.length > 0 ? parts.join(', ') : JSON.stringify(val);
+        } catch (_) {
+            return JSON.stringify(val);
+        }
+    }
+    return String(val);
 }
 
 export async function renderGoalsTab(containerEl) {
@@ -37,16 +64,114 @@ export async function renderGoalsTab(containerEl) {
     
     rootEl = containerEl;
     
-    // ── 1. Bind Sub Tab Filters ──
-    const filterBtns = rootEl.querySelectorAll('#plot-goals-filter-bar .plot-sub-tab');
-    filterBtns.forEach(btn => {
-        btn.addEventListener('click', () => {
-            filterBtns.forEach(b => b.classList.remove('active'));
-            btn.classList.add('active');
-            activeFilter = btn.dataset.filter;
-            renderGoalTreeUI();
+    // ── 1. Bind Sub Tab Filters (supports dynamic RPG category tabs) ──
+    const filterBar = rootEl.querySelector('#plot-goals-filter-bar');
+    
+    // activeFilter can be a status string ('active','complete','failed','all')
+    // OR in RPG mode, activeRpgCategoryFilter holds the category value (module-level)
+    activeFilter = 'active';
+    activeRpgCategoryFilter = null; // reset on tab re-render
+
+    function buildStaticFilterTabs() {
+        filterBar.innerHTML = `
+            <button class="plot-sub-tab active" data-filter="active" title="进行中"><i class="fa-solid fa-person-running"></i></button>
+            <button class="plot-sub-tab" data-filter="complete" title="已完成"><i class="fa-solid fa-circle-check"></i></button>
+            <button class="plot-sub-tab" data-filter="failed" title="已失败"><i class="fa-solid fa-circle-xmark"></i></button>
+            <button class="plot-sub-tab" data-filter="all" title="全部"><i class="fa-solid fa-list"></i></button>
+        `;
+        filterBar.querySelectorAll('.plot-sub-tab').forEach(btn => {
+            btn.addEventListener('click', () => {
+                filterBar.querySelectorAll('.plot-sub-tab').forEach(b => b.classList.remove('active'));
+                btn.classList.add('active');
+                activeFilter = btn.dataset.filter;
+                activeRpgCategoryFilter = null;
+                renderGoalTreeUI();
+            });
         });
-    });
+    }
+
+    async function buildRpgCategoryTabs(rpgConfig) {
+        const goals = get('goals') || {};
+        const fieldKey = rpgConfig.categoryField || 'category';
+        const cats = new Set();
+        Object.values(goals).forEach(g => {
+            if (!g.deleted && g.status !== 'hidden') {
+                const v = g[fieldKey];
+                if (v !== undefined && v !== null && String(v).trim() !== '') cats.add(String(v).trim());
+            }
+        });
+
+        const RPG_TRANSLATIONS = {
+            'quest': '任务',
+            'quests': '任务',
+            'achievement': '成就',
+            'achievements': '成就',
+            'skill': '技能',
+            'skills': '技能',
+            'character': '角色',
+            'characters': '角色',
+            'item': '道具',
+            'items': '道具',
+            'stat': '属性',
+            'stats': '属性',
+            'badge': '徽章',
+            'badges': '徽章',
+            'equipment': '装备',
+            'equipments': '装备',
+            'weapon': '武器',
+            'weapons': '武器',
+            'buff': '增益',
+            'buffs': '增益',
+            'debuff': '减益',
+            'debuffs': '减益'
+        };
+
+        const catList = Array.from(cats);
+        const allLabel = `<i class="fa-solid fa-layer-group"></i>`;
+        let html = `<button class="plot-sub-tab active" data-cat="" title="全部分类" style="min-width:28px;">${allLabel}</button>`;
+        catList.forEach(cat => {
+            const displayLabel = RPG_TRANSLATIONS[cat.toLowerCase()] || cat;
+            html += `<button class="plot-sub-tab" data-cat="${cat}" title="${cat}" style="min-width:28px; font-size:0.75em; max-width:52px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; padding:2px 4px;">${displayLabel}</button>`;
+        });
+        filterBar.innerHTML = html;
+        filterBar.querySelectorAll('.plot-sub-tab').forEach(btn => {
+            btn.addEventListener('click', () => {
+                filterBar.querySelectorAll('.plot-sub-tab').forEach(b => b.classList.remove('active'));
+                btn.classList.add('active');
+                activeRpgCategoryFilter = btn.dataset.cat || null;
+                activeFilter = 'all'; // in RPG mode, show all statuses (layout handles display)
+                renderGoalTreeUI();
+            });
+        });
+    }
+
+    async function rebuildFilterTabs(preserveSelected = true) {
+        const cfg = await getActiveModeConfig('goals');
+        const rpg = cfg.rpgConfig;
+        if (rpg && rpg.enabled) {
+            const oldFilter = activeRpgCategoryFilter;
+            await buildRpgCategoryTabs(rpg);
+            if (preserveSelected && oldFilter) {
+                const btn = filterBar.querySelector(`.plot-sub-tab[data-cat="${oldFilter}"]`);
+                if (btn) {
+                    filterBar.querySelectorAll('.plot-sub-tab').forEach(b => b.classList.remove('active'));
+                    btn.classList.add('active');
+                    activeRpgCategoryFilter = oldFilter;
+                } else {
+                    activeRpgCategoryFilter = null;
+                }
+            } else {
+                activeRpgCategoryFilter = null;
+            }
+            activeFilter = 'all';
+        } else {
+            buildStaticFilterTabs();
+            activeFilter = 'active';
+        }
+    }
+
+    await rebuildFilterTabs();
+
     
     // ── 2. Bind Manual Add Button ──
     const addTriggerBtn = rootEl.querySelector('#plot-goal-add-trigger-btn');
@@ -155,6 +280,12 @@ export async function renderGoalsTab(containerEl) {
         // Compile actions
         const actions = actionRowCompilers.map(fn => fn());
         
+        // Compile prerequisites
+        const preRequisites = [];
+        rootEl.querySelectorAll('#plot-drawer-prerequisites-list .plot-drawer-prereq-chk:checked').forEach(chk => {
+            preRequisites.push(chk.value);
+        });
+
         // Apply edits
         goal.title = title;
         goal.description = description;
@@ -162,6 +293,7 @@ export async function renderGoalsTab(containerEl) {
         goal.type = type;
         goal.conditions = conditions;
         goal.actions = actions;
+        goal.preRequisites = preRequisites;
         goal.injectLineTemplate = rootEl.querySelector('#plot-drawer-goal-inject-line-template')?.value.trim() || '';
         
         // Compile custom/extra fields
@@ -170,12 +302,20 @@ export async function renderGoalsTab(containerEl) {
             const key = row.querySelector('.field-key').value.trim();
             const val = row.querySelector('.field-val').value.trim();
             if (key && val) {
-                extraFields[key] = val;
+                let parsedVal = val;
+                if ((val.startsWith('{') && val.endsWith('}')) || (val.startsWith('[') && val.endsWith(']'))) {
+                    try {
+                        parsedVal = JSON.parse(val);
+                    } catch (_) {
+                        parsedVal = val;
+                    }
+                }
+                extraFields[key] = parsedVal;
             }
         });
         
         // Delete previous extra keys on edit
-        const CORE_GOAL_KEYS = ['id', 'parentId', 'title', 'name', 'description', 'status', 'type', 'conditions', 'actions', 'injectLineTemplate', 'completedDetail'];
+        const CORE_GOAL_KEYS = ['id', 'parentId', 'title', 'name', 'description', 'status', 'type', 'conditions', 'actions', 'injectLineTemplate', 'completedDetail', 'preRequisites'];
         const oldExtraKeys = Object.keys(goal).filter(k => !CORE_GOAL_KEYS.includes(k));
         oldExtraKeys.forEach(k => delete goal[k]);
         
@@ -203,9 +343,10 @@ export async function renderGoalsTab(containerEl) {
     if (!_goalsEventsBound) {
         _goalsEventsBound = true;
 
-        document.addEventListener('plot:storeUpdated', () => {
+        document.addEventListener('plot:storeUpdated', async () => {
             if (isSelfUpdatingGoalStatus) return;
             if (document.getElementById('plot-goals-tree-container')) {
+                await rebuildFilterTabs(true);
                 renderGoalTreeUI();
             }
         });
@@ -213,9 +354,10 @@ export async function renderGoalsTab(containerEl) {
 
     // B14 Fix: cancel any previous store subscription before registering a new one
     if (_goalsStoreUnsubscribe) _goalsStoreUnsubscribe();
-    _goalsStoreUnsubscribe = subscribe('goals', () => {
+    _goalsStoreUnsubscribe = subscribe('goals', async () => {
         if (isSelfUpdatingGoalStatus) return;
         if (document.getElementById('plot-goals-tree-container')) {
+            await rebuildFilterTabs(true);
             renderGoalTreeUI();
         }
     });
@@ -241,6 +383,7 @@ export async function renderGoalsTab(containerEl) {
     const { show: showConfigDrawer } = createModuleConfigDrawer('goals', rootEl, async (newCfg) => {
         console.log('[Plot Goals] Config saved:', newCfg);
         await refreshModeSelector();
+        await rebuildFilterTabs(false);
         renderGoalTreeUI();
     });
     configDrawerBtn.addEventListener('click', showConfigDrawer);
@@ -412,6 +555,7 @@ function buildGoalNodeDOM(goal, goalsMap, displayCfg = { showDesc: false, showSt
     if (goal.status === 'complete') card.classList.add('is-complete');
     if (goal.status === 'failed') card.classList.add('is-failed');
     if (goal.status === 'hidden') card.classList.add('is-hidden');
+    if (goal.status === 'locked') card.classList.add('is-locked');
     
     const row = document.createElement('div');
     row.className = 'plot-goal-header-row';
@@ -443,9 +587,21 @@ function buildGoalNodeDOM(goal, goalsMap, displayCfg = { showDesc: false, showSt
     }
     leftSide.appendChild(foldIcon);
     
-    // Status Checkbox Icon (using FontAwesome instead of standard checkbox inputs to prevent custom theme anomalies)
+    // Status Checkbox Icon — mapped by status
     const chk = document.createElement('i');
-    chk.className = goal.status === 'complete' ? 'fa-solid fa-circle-check plot-goal-status-icon' : 'fa-regular fa-circle plot-goal-status-icon';
+    const statusIconClassMap = {
+        complete: 'fa-solid fa-circle-check',
+        failed: 'fa-solid fa-circle-xmark',
+        hidden: 'fa-regular fa-eye-slash',
+        locked: 'fa-solid fa-lock',
+        unlocked: 'fa-regular fa-circle-dot'
+    };
+    const baseIconClass = statusIconClassMap[goal.status] || 'fa-regular fa-circle';
+    chk.className = `${baseIconClass} plot-goal-status-icon`;
+    if (goal.status === 'locked') {
+        chk.style.opacity = '0.4';
+        chk.style.cursor = 'default';
+    }
     leftSide.appendChild(chk);
     
     // Title
@@ -453,6 +609,16 @@ function buildGoalNodeDOM(goal, goalsMap, displayCfg = { showDesc: false, showSt
     titleEl.className = 'plot-goal-title';
     titleEl.textContent = goal.title;
     titleEl.title = goal.description || '无任务描述';
+    
+    // Custom Icon Support
+    if (goal.icon && String(goal.icon).trim() !== '') {
+        const customIcon = document.createElement('i');
+        const iconClass = String(goal.icon).trim().includes('fa-') ? String(goal.icon).trim() : `fa-solid fa-${String(goal.icon).trim()}`;
+        customIcon.className = `${iconClass} plot-goal-custom-icon`;
+        customIcon.style.cssText = 'margin-right: 4px; font-size: 0.95em; opacity: 0.85;';
+        leftSide.appendChild(customIcon);
+    }
+    
     leftSide.appendChild(titleEl);
     
     // Type Badge
@@ -471,13 +637,12 @@ function buildGoalNodeDOM(goal, goalsMap, displayCfg = { showDesc: false, showSt
     if (displayCfg.showStatus) {
         statusBadge = document.createElement('span');
         const statusStr = goal.status || 'active';
-        let statusText = '进行中';
-        if (statusStr === 'complete') statusText = '已完成';
-        else if (statusStr === 'failed') statusText = '已失败';
-        else if (statusStr === 'hidden') statusText = '已隐藏';
-        
+        const statusTextMap = {
+            active: '进行中', complete: '已完成', failed: '已失败',
+            hidden: '已隐藏', locked: '已锁定', unlocked: '待激活'
+        };
         statusBadge.className = `plot-goal-status-badge ${statusStr}`;
-        statusBadge.textContent = statusText;
+        statusBadge.textContent = statusTextMap[statusStr] || statusStr;
         leftSide.appendChild(statusBadge);
     }
     
@@ -531,10 +696,11 @@ function buildGoalNodeDOM(goal, goalsMap, displayCfg = { showDesc: false, showSt
     card.appendChild(row);
     
     // Details panel (Description and Custom attributes)
-    const CORE_GOAL_KEYS = ['id', 'parentId', 'title', 'name', 'description', 'status', 'type', 'conditions', 'actions', 'injectLineTemplate', 'completedDetail'];
+    const CORE_GOAL_KEYS = ['id', 'parentId', 'title', 'name', 'description', 'status', 'type', 'conditions', 'actions', 'injectLineTemplate', 'completedDetail', 'preRequisites'];
     const extraKeys = Object.keys(goal).filter(k => !CORE_GOAL_KEYS.includes(k));
-    const hasExtras = extraKeys.some(k => goal[k] !== undefined && goal[k] !== null && goal[k] !== '');
-    const hasDesc = displayCfg.showDesc && goal.description;
+    const isLocked = goal.status === 'locked';
+    const hasExtras = !isLocked && extraKeys.some(k => goal[k] !== undefined && goal[k] !== null && goal[k] !== '');
+    const hasDesc = displayCfg.showDesc && goal.description && !isLocked;
     
     if (hasDesc || hasExtras) {
         const details = document.createElement('div');
@@ -569,7 +735,7 @@ function buildGoalNodeDOM(goal, goalsMap, displayCfg = { showDesc: false, showSt
                     badge.style.backgroundColor = badgeBg;
                     badge.style.borderColor = badgeBorder;
                     
-                    const cleanVal = String(val).trim();
+                    const cleanVal = formatValueForDisplay(val).trim();
                     badge.textContent = `${label}: ${cleanVal}`;
                     if (badge.textContent.length > 24) {
                         badge.style.width = '100%';
@@ -594,20 +760,29 @@ function buildGoalNodeDOM(goal, goalsMap, displayCfg = { showDesc: false, showSt
     // Children list container
     const childrenContainer = document.createElement('div');
     childrenContainer.className = 'plot-goal-children';
-    childrenContainer.style.display = 'block';
+    const isFolded = foldedGoalIds.has(goal.id);
+    childrenContainer.style.display = isFolded ? 'none' : 'block';
     
     children.forEach(child => {
         childrenContainer.appendChild(buildGoalNodeDOM(child, goalsMap, displayCfg));
     });
     node.appendChild(childrenContainer);
     
-    // Bind accordion fold/unfold click
+    // Set proper fold icon state initially and save fold state on click
     if (hasChildren) {
+        foldIcon.className = isFolded ? 'fa-solid fa-chevron-right plot-goal-fold-icon' : 'fa-solid fa-chevron-down plot-goal-fold-icon';
         foldIcon.addEventListener('click', (e) => {
             e.stopPropagation();
             const isOpen = childrenContainer.style.display !== 'none';
-            childrenContainer.style.display = isOpen ? 'none' : 'block';
-            foldIcon.className = isOpen ? 'fa-solid fa-chevron-right plot-goal-fold-icon' : 'fa-solid fa-chevron-down plot-goal-fold-icon';
+            if (isOpen) {
+                foldedGoalIds.add(goal.id);
+                childrenContainer.style.display = 'none';
+                foldIcon.className = 'fa-solid fa-chevron-right plot-goal-fold-icon';
+            } else {
+                foldedGoalIds.delete(goal.id);
+                childrenContainer.style.display = 'block';
+                foldIcon.className = 'fa-solid fa-chevron-down plot-goal-fold-icon';
+            }
         });
     }
     
@@ -616,22 +791,27 @@ function buildGoalNodeDOM(goal, goalsMap, displayCfg = { showDesc: false, showSt
         return ch.some(c => (c.status === 'active' || !c.status) || hasActiveDescendants(c.id));
     };
 
-    // Bind status toggle click on icon
+    // Bind status toggle click on icon (locked items are not interactive)
     chk.addEventListener('click', () => {
+        if (goal.status === 'locked') return; // locked: no interaction
         const nextStatus = goal.status === 'complete' ? 'active' : 'complete';
         
         // Zero-latency instant visual feedback in DOM
         if (nextStatus === 'complete') {
             card.classList.add('is-complete');
-            card.classList.remove('is-failed', 'is-hidden');
+            card.classList.remove('is-failed', 'is-hidden', 'is-locked');
             chk.className = 'fa-solid fa-circle-check plot-goal-status-icon';
+            chk.style.opacity = '';
+            chk.style.cursor = '';
             if (statusBadge) {
                 statusBadge.textContent = '已完成';
                 statusBadge.className = 'plot-goal-status-badge complete';
             }
         } else {
-            card.classList.remove('is-complete', 'is-failed', 'is-hidden');
+            card.classList.remove('is-complete', 'is-failed', 'is-hidden', 'is-locked');
             chk.className = 'fa-regular fa-circle plot-goal-status-icon';
+            chk.style.opacity = '';
+            chk.style.cursor = '';
             if (statusBadge) {
                 statusBadge.textContent = '进行中';
                 statusBadge.className = 'plot-goal-status-badge active';
@@ -723,8 +903,9 @@ function renderGoalTreeUI() {
         if (!container) return;
         
         const goals = get('goals') || {};
-        const goalList = Object.values(goals);
+        const goalList = Object.values(goals).filter(g => !g.deleted);
         
+        const scrollTop = container.scrollTop;
         container.innerHTML = '';
         
         // Update parent list dropdowns in Quick Adder
@@ -735,56 +916,271 @@ function renderGoalTreeUI() {
             return;
         }
         
-        // Load display configs
+        // Load display + rpg configs
         const cfg = await getActiveModeConfig('goals');
         const displayCfg = cfg.display || { showDesc: false, showStatus: true, showType: false };
+        const rpgConfig = cfg.rpgConfig;
         
-        // Build tree index. Find root goals (parentId is null or parentId points to a deleted goal)
-        const roots = goalList.filter(g => !g.parentId || !goals[g.parentId]);
-        
-        // Filter tree logic based on activeFilter
-        const filteredRoots = roots.filter(root => {
-            if (activeFilter === 'all') return true;
+        if (rpgConfig && rpgConfig.enabled) {
+            // ── RPG PANEL MODE ──────────────────────────────────────────────
+            const fieldKey = rpgConfig.categoryField || 'category';
             
-            // Recursive helper to check if this node matches filter
-            const matchFilter = (node) => {
-                if (activeFilter === 'active') return node.status === 'active' || !node.status;
-                return node.status === activeFilter;
-            };
+            // Filter by selected RPG category tab and exclude hidden goals in RPG panel mode
+            let visible = goalList.filter(g => g.status !== 'hidden');
+            if (activeRpgCategoryFilter) {
+                visible = visible.filter(g => String(g[fieldKey] || '').trim() === activeRpgCategoryFilter);
+            }
             
-            // Recursive helper to check if any child matches filter
-            const anyDescendantMatches = (nodeId) => {
-                const ch = goalList.filter(g => g.parentId === nodeId);
-                return ch.some(c => matchFilter(c) || anyDescendantMatches(c.id));
-            };
+            if (visible.length === 0) {
+                container.innerHTML = `<div style="text-align:center; padding:30px; font-size:0.85em; opacity:0.7;"><i class="fa-solid fa-filter"></i> 该分类下暂无条目。</div>`;
+                return;
+            }
             
-            return matchFilter(root) || anyDescendantMatches(root.id);
-        });
-        
-        if (filteredRoots.length === 0) {
-            container.innerHTML = `<div style="text-align:center; padding:30px; font-size:0.85em; opacity:0.7;"><i class="fa-solid fa-filter"></i> 无匹配该状态过滤的目标。</div>`;
-            return;
+            // Group by category
+            const grouped = {};
+            visible.forEach(g => {
+                const cat = String(g[fieldKey] || '').trim() || '未分类';
+                if (!grouped[cat]) grouped[cat] = [];
+                grouped[cat].push(g);
+            });
+            
+            const sortById = (arr) => arr.slice().sort((a, b) => {
+                const getNum = id => { const m = id.match(/g_(\d+)/) || id.match(/goal_(\d+)/); return m ? parseInt(m[1], 10) : 0; };
+                return getNum(a.id) - getNum(b.id) || a.id.localeCompare(b.id);
+            });
+            
+            for (const [cat, items] of Object.entries(grouped)) {
+                const catCfg = rpgConfig.layouts?.[cat] || { layout: 'tree', showFields: [] };
+                const layout = catCfg.layout || 'tree';
+                const showFields = catCfg.showFields || [];
+                
+                // Category header (only shown when viewing "all")
+                if (!activeRpgCategoryFilter) {
+                    const header = document.createElement('div');
+                    header.style.cssText = 'font-size:0.8em; font-weight:bold; color:var(--SmartThemeEmColor); opacity:0.85; padding:4px 2px 2px; border-bottom:1px solid var(--SmartThemeBorderColor); margin-bottom:6px; margin-top:8px; letter-spacing:0.05em;';
+                    header.textContent = `◆ ${cat}`;
+                    container.appendChild(header);
+                }
+                
+                const sorted = sortById(items);
+                
+                if (layout === 'grid') {
+                    container.appendChild(buildGridLayout(sorted, goals, displayCfg, showFields));
+                } else if (layout === 'stats') {
+                    container.appendChild(buildStatsLayout(sorted, showFields, fieldKey));
+                } else if (layout === 'list') {
+                    sorted.forEach(g => {
+                        container.appendChild(buildGoalNodeDOM(g, goals, displayCfg, showFields, true));
+                    });
+                } else {
+                    // tree (default)
+                    const roots = sorted.filter(g => !g.parentId || !goals[g.parentId] || String(goals[g.parentId]?.[fieldKey] || '').trim() !== cat);
+                    roots.forEach(root => {
+                        container.appendChild(buildGoalNodeDOM(root, goals, displayCfg, showFields, false));
+                    });
+                }
+            }
+        } else {
+            // ── CLASSIC STATUS FILTER MODE ─────────────────────────────────
+            const roots = goalList.filter(g => !g.parentId || !goals[g.parentId]);
+            
+            const filteredRoots = roots.filter(root => {
+                if (activeFilter === 'all') return true;
+                const matchFilter = (node) => {
+                    if (activeFilter === 'active') return node.status === 'active' || !node.status;
+                    return node.status === activeFilter;
+                };
+                const anyDescendantMatches = (nodeId) => {
+                    const ch = goalList.filter(g => g.parentId === nodeId);
+                    return ch.some(c => matchFilter(c) || anyDescendantMatches(c.id));
+                };
+                return matchFilter(root) || anyDescendantMatches(root.id);
+            });
+            
+            if (filteredRoots.length === 0) {
+                container.innerHTML = `<div style="text-align:center; padding:30px; font-size:0.85em; opacity:0.7;"><i class="fa-solid fa-filter"></i> 无匹配该状态过滤的目标。</div>`;
+                return;
+            }
+            
+            filteredRoots
+                .sort((a, b) => {
+                    const getNum = (id) => { const m = id.match(/g_(\d+)/) || id.match(/goal_(\d+)/); return m ? parseInt(m[1], 10) : 0; };
+                    return getNum(a.id) - getNum(b.id) || a.id.localeCompare(b.id);
+                })
+                .forEach(root => {
+                    container.appendChild(buildGoalNodeDOM(root, goals, displayCfg));
+                });
         }
         
-        // Stable sort chronologically by ID timestamp and append root elements
-        filteredRoots
-            .sort((a, b) => {
-                const getNum = (id) => {
-                    const match = id.match(/g_(\d+)/) || id.match(/goal_(\d+)/);
-                    return match ? parseInt(match[1], 10) : 0;
-                };
-                const numA = getNum(a.id);
-                const numB = getNum(b.id);
-                if (numA !== numB) return numA - numB;
-                return a.id.localeCompare(b.id);
-            })
-            .forEach(root => {
-                container.appendChild(buildGoalNodeDOM(root, goals, displayCfg));
-            });
+        container.scrollTop = scrollTop;
         } catch (err) {
             console.error('[Plot Goals] renderGoalTreeUI failed:', err);
         }
     }, 50);
+}
+
+// ── RPG Layout: Grid (achievement wall) ─────────────────────────────────────
+
+function buildGridLayout(goalList, goalsMap, displayCfg, showFields) {
+    const wrapper = document.createElement('div');
+    wrapper.style.cssText = 'display:grid; grid-template-columns: repeat(auto-fill, minmax(130px, 1fr)); gap:10px; width:100%; box-sizing:border-box;';
+    
+    goalList.forEach(goal => {
+        const isComplete = goal.status === 'complete';
+        const isLocked = goal.status === 'locked';
+        const isFailed = goal.status === 'failed';
+        
+        const card = document.createElement('div');
+        card.style.cssText = `
+            display:flex; flex-direction:column; align-items:center; justify-content:flex-start;
+            padding:10px 8px; border-radius:8px; text-align:center; cursor:pointer; gap:6px;
+            border:2px solid ${isComplete ? 'var(--SmartThemeEmColor)' : 'var(--SmartThemeBorderColor)'};
+            background:${isComplete ? 'rgba(var(--SmartThemeEmColor-rgb,150,120,255),0.08)' : 'rgba(0,0,0,0.15)'};
+            filter:${(isLocked || isFailed) ? 'grayscale(0.7) opacity(0.55)' : 'none'};
+            box-shadow:${isComplete ? '0 0 10px rgba(var(--SmartThemeEmColor-rgb,150,120,255),0.25)' : 'none'};
+            transition: all 0.2s ease; position:relative; overflow:hidden; box-sizing:border-box;
+        `;
+        card.dataset.id = goal.id;
+        
+        // Status / Custom icon
+        const iconEl = document.createElement('div');
+        let iconClass = '';
+        if (goal.icon && String(goal.icon).trim() !== '') {
+            iconClass = String(goal.icon).trim().includes('fa-') ? String(goal.icon).trim() : `fa-solid fa-${String(goal.icon).trim()}`;
+        } else {
+            const statusIconMap = { complete: 'fa-solid fa-star', failed: 'fa-solid fa-xmark', locked: 'fa-solid fa-lock', hidden: 'fa-solid fa-eye-slash', active: 'fa-solid fa-bolt', unlocked: 'fa-regular fa-circle' };
+            iconClass = statusIconMap[goal.status] || statusIconMap.active;
+        }
+        iconEl.style.cssText = `font-size:1.6em; color:${isComplete ? 'var(--SmartThemeEmColor)' : 'var(--SmartThemeBodyColor)'}; margin-bottom:2px;`;
+        iconEl.innerHTML = `<i class="${iconClass}"></i>`;
+        card.appendChild(iconEl);
+        
+        // Title
+        const titleEl = document.createElement('div');
+        titleEl.style.cssText = 'font-size:0.8em; font-weight:bold; line-height:1.2; word-break:break-word;';
+        titleEl.textContent = goal.title;
+        card.appendChild(titleEl);
+        
+        // Custom fields
+        if (showFields.length > 0 && !isLocked) {
+            const badgesEl = document.createElement('div');
+            badgesEl.style.cssText = 'display:flex; flex-wrap:wrap; justify-content:center; gap:3px; margin-top:2px;';
+            showFields.forEach(key => {
+                if (goal[key] !== undefined && goal[key] !== null && String(goal[key]).trim() !== '') {
+                    const b = document.createElement('span');
+                    b.style.cssText = 'font-size:0.68em; background:rgba(255,255,255,0.08); border-radius:3px; padding:1px 4px; opacity:0.8;';
+                    b.textContent = `${key}: ${formatValueForDisplay(goal[key])}`;
+                    badgesEl.appendChild(b);
+                }
+            });
+            if (badgesEl.children.length > 0) card.appendChild(badgesEl);
+        }
+        
+        card.addEventListener('click', () => openConfigDrawer(goal.id));
+        card.addEventListener('mouseenter', () => { if (!isLocked && !isFailed) card.style.transform = 'translateY(-2px)'; });
+        card.addEventListener('mouseleave', () => { card.style.transform = ''; });
+        
+        wrapper.appendChild(card);
+    });
+    
+    return wrapper;
+}
+
+// ── RPG Layout: Stats (character sheet attributes table) ────────────────────
+
+function buildStatsLayout(goalList, showFields, fieldKey) {
+    const wrapper = document.createElement('div');
+    wrapper.style.cssText = 'display:flex; flex-direction:column; gap:6px; width:100%; box-sizing:border-box;';
+    
+    goalList.forEach(goal => {
+        const row = document.createElement('div');
+        row.style.cssText = 'display:flex; align-items:center; gap:8px; padding:5px 8px; background:rgba(0,0,0,0.12); border-radius:5px; cursor:pointer; width:100%; box-sizing:border-box;';
+        row.dataset.id = goal.id;
+        
+        // Attribute name (title)
+        const nameEl = document.createElement('span');
+        nameEl.style.cssText = 'flex:1; font-size:0.85em; font-weight:bold; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; min-width:60px; display:inline-flex; align-items:center; gap:4px;';
+        if (goal.icon && String(goal.icon).trim() !== '') {
+            const iconClass = String(goal.icon).trim().includes('fa-') ? String(goal.icon).trim() : `fa-solid fa-${String(goal.icon).trim()}`;
+            nameEl.innerHTML = `<i class="${iconClass}" style="font-size:0.9em; opacity:0.8; flex-shrink:0;"></i> ${escapeHtml(goal.title)}`;
+        } else {
+            nameEl.textContent = goal.title;
+        }
+        row.appendChild(nameEl);
+        
+        // Show custom fields
+        const isLocked = goal.status === 'locked';
+        const hasValueField = showFields.includes('value');
+        const hasMaxField = showFields.includes('max');
+        const value = goal['value'] !== undefined ? goal['value'] : null;
+        const max = goal['max'] !== undefined ? goal['max'] : null;
+        
+        if (isLocked) {
+            const valEl = document.createElement('span');
+            valEl.style.cssText = 'font-size:0.8em; font-weight:normal; opacity:0.5; flex-shrink:0; min-width:30px; text-align:right; font-style:italic;';
+            valEl.textContent = '已锁定';
+            row.appendChild(valEl);
+        } else if (hasValueField && value !== null) {
+            if (hasMaxField && max !== null) {
+                // Show progress bar
+                const numVal = parseFloat(value) || 0;
+                const numMax = parseFloat(max) || 1;
+                const pct = Math.min(100, Math.round((numVal / numMax) * 100));
+                
+                const barWrap = document.createElement('div');
+                barWrap.style.cssText = 'flex:2; display:flex; flex-direction:column; gap:2px; min-width:60px;';
+                
+                const barLabel = document.createElement('div');
+                barLabel.style.cssText = 'display:flex; justify-content:space-between; font-size:0.72em; opacity:0.85;';
+                barLabel.innerHTML = `<span>${numVal}</span><span>${numMax}</span>`;
+                
+                const barOuter = document.createElement('div');
+                barOuter.style.cssText = 'height:6px; border-radius:3px; background:rgba(255,255,255,0.1); overflow:hidden; width:100%;';
+                const barInner = document.createElement('div');
+                barInner.style.cssText = `height:100%; width:${pct}%; background:var(--SmartThemeEmColor); border-radius:3px; transition:width 0.3s ease;`;
+                barOuter.appendChild(barInner);
+                
+                barWrap.appendChild(barLabel);
+                barWrap.appendChild(barOuter);
+                row.appendChild(barWrap);
+            } else {
+                const valEl = document.createElement('span');
+                valEl.style.cssText = 'font-size:0.88em; font-weight:bold; color:var(--SmartThemeEmColor); flex-shrink:0; min-width:30px; text-align:right;';
+                valEl.textContent = formatValueForDisplay(value);
+                row.appendChild(valEl);
+            }
+        }
+        
+        // Other custom fields (non value/max)
+        const otherFields = showFields.filter(k => k !== 'value' && k !== 'max' && k !== fieldKey);
+        if (otherFields.length > 0 && !isLocked) {
+            const extras = document.createElement('div');
+            extras.style.cssText = 'display:flex; flex-wrap:wrap; gap:3px; flex-shrink:0;';
+            otherFields.forEach(key => {
+                if (goal[key] !== undefined && goal[key] !== null && String(goal[key]).trim() !== '') {
+                    const b = document.createElement('span');
+                    b.style.cssText = 'font-size:0.7em; background:rgba(255,255,255,0.08); border-radius:3px; padding:1px 4px; opacity:0.85; white-space:nowrap;';
+                    b.textContent = `${key}: ${formatValueForDisplay(goal[key])}`;
+                    extras.appendChild(b);
+                }
+            });
+            if (extras.children.length > 0) row.appendChild(extras);
+        }
+        
+        // Edit button
+        const editBtn = document.createElement('i');
+        editBtn.className = 'fa-solid fa-pen-to-square';
+        editBtn.style.cssText = 'font-size:0.75em; opacity:0.4; flex-shrink:0; cursor:pointer;';
+        editBtn.title = '编辑此条目';
+        editBtn.addEventListener('click', (e) => { e.stopPropagation(); openConfigDrawer(goal.id); });
+        row.appendChild(editBtn);
+        
+        row.addEventListener('click', () => openConfigDrawer(goal.id));
+        
+        wrapper.appendChild(row);
+    });
+    
+    return wrapper;
 }
 
 // ── Refresh Parent Dropdowns ───────────────────────────────────────────────────
@@ -914,6 +1310,29 @@ function openConfigDrawer(goalId = null) {
             actionRowCompilers.push(rowObj.getActionConfig);
         });
         
+        // Render prerequisites checkboxes list
+        const prereqsList = rootEl.querySelector('#plot-drawer-prerequisites-list');
+        if (prereqsList) {
+            prereqsList.innerHTML = '';
+            // Exclude current goal to prevent self-dependency
+            const allGoals = Object.values(goals).filter(g => g.id !== goal.id);
+            if (allGoals.length === 0) {
+                prereqsList.innerHTML = '<span style="font-size:0.75em; opacity:0.5;">(无其他任务)</span>';
+            } else {
+                const currentPrereqs = goal.preRequisites || [];
+                allGoals.forEach(g => {
+                    const isChecked = currentPrereqs.includes(g.id);
+                    const label = document.createElement('label');
+                    label.style.cssText = 'display:inline-flex; align-items:center; gap:4px; font-size:0.78em; background:rgba(0,0,0,0.15); padding:2px 6px; border-radius:3px; cursor:pointer; margin-right:4px; margin-bottom:4px;';
+                    label.innerHTML = `
+                        <input type="checkbox" class="plot-drawer-prereq-chk" value="${g.id}" ${isChecked ? 'checked' : ''}>
+                        ${escapeHtml(g.title || g.id)}
+                    `;
+                    prereqsList.appendChild(label);
+                });
+            }
+        }
+
         // Render custom fields
         const customFieldsList = rootEl.querySelector('#plot-drawer-custom-fields-list');
         if (customFieldsList) {
@@ -922,15 +1341,18 @@ function openConfigDrawer(goalId = null) {
                 const row = document.createElement('div');
                 row.className = 'plot-custom-field-row';
                 row.style.cssText = 'display: flex; gap: 6px; align-items: center; width: 100%;';
+                
+                const valStr = typeof val === 'object' && val !== null ? JSON.stringify(val) : String(val);
+                
                 row.innerHTML = `
                     <input type="text" class="plot-input field-key" placeholder="属性名(如 reward)" value="${escapeHtml(key)}" style="flex: 1; font-size: 0.85em; padding: 4px 6px;">
-                    <input type="text" class="plot-input field-val" placeholder="属性值" value="${escapeHtml(val)}" style="flex: 2; font-size: 0.85em; padding: 4px 6px;">
+                    <input type="text" class="plot-input field-val" placeholder="属性值" value="${escapeHtml(valStr)}" style="flex: 2; font-size: 0.85em; padding: 4px 6px;">
                     <i class="fa-solid fa-trash-can field-delete" style="cursor: pointer; color: var(--SmartThemeQuoteColor); font-size: 0.9em; padding: 0 4px;" title="删除属性"></i>
                 `;
                 row.querySelector('.field-delete').addEventListener('click', () => row.remove());
                 customFieldsList.appendChild(row);
             };
-            const CORE_GOAL_KEYS = ['id', 'parentId', 'title', 'name', 'description', 'status', 'type', 'conditions', 'actions', 'injectLineTemplate', 'completedDetail'];
+            const CORE_GOAL_KEYS = ['id', 'parentId', 'title', 'name', 'description', 'status', 'type', 'conditions', 'actions', 'injectLineTemplate', 'completedDetail', 'preRequisites'];
             const extraKeys = Object.keys(goal).filter(k => !CORE_GOAL_KEYS.includes(k));
             extraKeys.forEach(k => {
                 renderCustomFieldRow(k, goal[k]);

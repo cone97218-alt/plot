@@ -5,6 +5,7 @@
  */
 
 import { getContext, extension_settings } from '../../../../../extensions.js';
+import { saveSettings } from '../../../../../../script.js';
 import { selected_world_info, loadWorldInfo } from '../../../../../world-info.js';
 import { listConnections } from '../core/api-client.js';
 import { getPlotValue, savePlotValue } from '../core/indexeddb.js';
@@ -16,7 +17,9 @@ function escapeHtml(text) {
     return String(text || '')
         .replace(/&/g, '&amp;')
         .replace(/</g, '&lt;')
-        .replace(/>/g, '&gt;');
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#39;');
 }
 
 /**
@@ -376,6 +379,23 @@ export function createModuleConfigDrawer(moduleId, containerEl, onSave) {
                     </div>
                 </div>
                 
+                <!-- RPG Panel Customizer (Goals-specific) -->
+                <div class="plot-setting-group" id="plot-goals-rpg-settings" style="border-top: 1px solid var(--SmartThemeBorderColor); padding-top: 8px; margin-top: 8px;">
+                    <label style="display:flex; align-items:center; gap:8px; font-size:0.92em; font-weight:bold; cursor:pointer; margin-bottom: 6px;">
+                        <input type="checkbox" class="plot-drawer-rpg-enabled-chk"> 开启 RPG 面板模式
+                    </label>
+                    <div class="plot-rpg-config-container" style="display: none; flex-direction: column; gap: 8px;">
+                        <div style="display: flex; align-items: center; gap: 8px;">
+                            <span class="plot-hint-text" style="font-size:0.8em; opacity:0.8; white-space:nowrap;">分类字段名:</span>
+                            <input type="text" class="plot-drawer-rpg-field-input plot-input" placeholder="例如 category" style="flex:1; height:24px; padding:2px 6px; font-size:0.8em;" value="category">
+                            <button id="plot-drawer-scan-rpg-btn" class="menu_button plot-btn" style="padding: 2px 8px; font-size: 0.75em;" title="扫描所有任务数据，生成当前分类列表"><i class="fa-solid fa-wand-magic-sparkles"></i> 扫描分类</button>
+                        </div>
+                        <div id="plot-drawer-rpg-layouts-list" style="display: flex; flex-direction: column; gap: 6px; margin-top: 4px; max-height: 250px; overflow-y: auto; overflow-x: hidden; box-sizing: border-box; padding: 4px; border: 1px dashed var(--SmartThemeBorderColor); border-radius: 4px; background: rgba(0,0,0,0.1);">
+                            <!-- Dynamic RPG category layouts config render here -->
+                        </div>
+                    </div>
+                </div>
+                
                 <!-- Goals Custom Badges Settings (Goals-specific) -->
                 <div class="plot-setting-group" id="plot-goals-badges-settings" style="border-top: 1px solid var(--SmartThemeBorderColor); padding-top: 8px; margin-top: 8px;">
                     <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px;">
@@ -529,7 +549,121 @@ export function createModuleConfigDrawer(moduleId, containerEl, onSave) {
     }
     
     // Cancel / Close
-    const hide = () => {
+    const doSave = async () => {
+        try {
+        const modes = getModuleModes(moduleId);
+        const mode = modes.find(m => m.id === currentModeId);
+        if (!mode) return;
+        
+        mode.name = modeNameInput.value.trim() || '未命名模式';
+        if (moduleId === 'goals') {
+            mode.presetId = presetEvalSelect?.value ?? 'default';
+            mode.generationPresetId = presetGenSelect?.value ?? 'default';
+        } else {
+            mode.presetId = presetSelect?.value ?? 'default';
+        }
+        mode.useCustomConnection = connToggle?.checked ?? false;
+        mode.connectionId = connSelect?.value ?? 'default';
+        mode.useCustomReading = readToggle?.checked ?? false;
+        
+        mode.reading = mode.reading || {};
+        mode.reading.historyLimit = Number(readLimit?.value) || 0;
+        delete mode.reading.limit;
+        mode.reading.injectCharacterDescription = drawer.querySelector('.plot-drawer-char-desc-chk')?.checked ?? true;
+        mode.reading.injectUserDescription = drawer.querySelector('.plot-drawer-user-desc-chk')?.checked ?? true;
+        mode.reading.injectCharacterLorebook = drawer.querySelector('.plot-drawer-wi-char-chk')?.checked ?? true;
+        mode.reading.injectChatLorebook = drawer.querySelector('.plot-drawer-wi-chat-chk')?.checked ?? true;
+        mode.reading.injectGlobalLorebook = drawer.querySelector('.plot-drawer-wi-global-chk')?.checked ?? true;
+        mode.reading.lorebookExcludePrefixes = drawer.querySelector('.plot-drawer-wi-exclude')?.value.trim() ?? '';
+        mode.reading.lorebookIncludeFilter = drawer.querySelector('.plot-drawer-wi-include')?.value.trim() ?? '';
+        mode.reading.customLorebookName = drawer.querySelector('.plot-drawer-wi-custom-select')?.value ?? '';
+        mode.reading.manuallySelectedEntries = [...lorebookSelections];
+        mode.reading.regexRules = [...localRegexRules];
+        mode.reading.disabledRegexIds = [...localDisabledRegexIds];
+        mode.reading.summaryJsExpression = drawer.querySelector('.plot-drawer-read-summary-expr')?.value.trim() ?? '';
+        
+        if (moduleId === 'goals') {
+            mode.display = {
+                showDesc: drawer.querySelector('.plot-drawer-display-desc-chk')?.checked ?? false,
+                showStatus: drawer.querySelector('.plot-drawer-display-status-chk')?.checked ?? true,
+                showType: drawer.querySelector('.plot-drawer-display-type-chk')?.checked ?? false
+            };
+
+            // Save RPG panel settings
+            const rpgEnabled = drawer.querySelector('.plot-drawer-rpg-enabled-chk')?.checked ?? false;
+            const rpgField = drawer.querySelector('.plot-drawer-rpg-field-input')?.value.trim() || 'category';
+            const rpgLayouts = {};
+            drawer.querySelectorAll('#plot-drawer-rpg-layouts-list .plot-rpg-layout-row').forEach(row => {
+                const cat = row.dataset.category;
+                const layout = row.querySelector('.rpg-layout-select')?.value ?? 'tree';
+                const showFields = [];
+                row.querySelectorAll('.rpg-attr-chk:checked').forEach(chk => {
+                    showFields.push(chk.dataset.attr);
+                });
+                if (cat) {
+                    rpgLayouts[cat] = { layout, showFields };
+                }
+            });
+            mode.rpgConfig = {
+                enabled: rpgEnabled,
+                categoryField: rpgField,
+                layouts: rpgLayouts
+            };
+            
+            // Save badges
+            const finalBadges = {};
+            drawer.querySelectorAll('#plot-drawer-badges-rules-list .plot-badge-rule-row').forEach(row => {
+                const key = row.querySelector('.badge-key')?.value.trim();
+                const label = row.querySelector('.badge-label')?.value.trim();
+                const color = row.querySelector('.badge-color')?.value.trim();
+                const bgColor = row.querySelector('.badge-bg-color')?.value.trim();
+                const borderColor = row.querySelector('.badge-border-color')?.value.trim();
+                if (key && label) {
+                    finalBadges[key] = { label, color, bgColor, borderColor };
+                }
+            });
+            if (!getContext().extensionSettings.plot) getContext().extensionSettings.plot = {};
+            getContext().extensionSettings.plot.customBadges = finalBadges;
+            
+            // Save global goal injection settings
+            getContext().extensionSettings.plot.goalInjection = {
+                enabled: drawer.querySelector('.plot-drawer-inject-enabled-chk')?.checked ?? false,
+                template: drawer.querySelector('.plot-drawer-inject-template')?.value ?? '',
+                lineTemplate: drawer.querySelector('.plot-drawer-inject-line-template')?.value.trim() ?? ''
+            };
+        }
+
+        if (moduleId === 'variables') {
+            if (!getContext().extensionSettings.plot) getContext().extensionSettings.plot = {};
+            getContext().extensionSettings.plot.variablesInjection = {
+                enabled: drawer.querySelector('.plot-drawer-var-inject-enabled-chk')?.checked ?? true,
+                injectAll: drawer.querySelector('.plot-drawer-var-inject-all-chk')?.checked ?? false,
+                template: drawer.querySelector('.plot-drawer-var-inject-template')?.value ?? '',
+                lineTemplate: drawer.querySelector('.plot-drawer-var-inject-line-template')?.value.trim() ?? ''
+            };
+        }
+        
+        getContext().extensionSettings.plot[`${moduleId}Modes`] = modes;
+        getContext().saveSettingsDebounced?.();
+        await saveSettings();
+        
+        console.log('[Plot] Settings successfully saved for module:', moduleId, 'mode:', mode);
+        if (typeof toastr !== 'undefined') {
+            toastr.success(`已成功保存模式「${mode.name}」的配置选项！`);
+        }
+        
+        if (onSave) {
+            await onSave(mode);
+        }
+        } catch (err) {
+            console.error('[Plot] doSave error:', err);
+            if (typeof toastr !== 'undefined') {
+                toastr.error(`保存配置失败: ${err.message}`);
+            }
+        }
+    };
+
+    const hideOnly = () => {
         drawer.classList.remove('show');
         if (_drawerWiUnsubscribe) {
             _drawerWiUnsubscribe();
@@ -537,10 +671,14 @@ export function createModuleConfigDrawer(moduleId, containerEl, onSave) {
         }
         setTimeout(() => { drawer.style.display = 'none'; }, 200);
     };
-    closeBtn.addEventListener('click', hide);
-    cancelBtn.addEventListener('click', hide);
+
+    // Close = auto-save then hide
+    closeBtn.addEventListener('click', async () => { await doSave(); hideOnly(); });
+    // Cancel = discard changes, just hide
+    cancelBtn.addEventListener('click', hideOnly);
+    // Save button = save and close
+    saveBtn.addEventListener('click', async () => { await doSave(); hideOnly(); });
     
-    // ── Mode Management Actions ──
     modeAddBtn.addEventListener('click', async () => {
         const name = prompt('请输入新模式名称:');
         if (!name || !name.trim()) return;
@@ -574,6 +712,10 @@ export function createModuleConfigDrawer(moduleId, containerEl, onSave) {
         getContext().extensionSettings.plot[`${moduleId}Modes`] = modes;
         
         await setActiveModeId(moduleId, id);
+        await saveSettings();
+        if (onSave) {
+            await onSave(newMode);
+        }
         await show();
     });
     
@@ -589,87 +731,15 @@ export function createModuleConfigDrawer(moduleId, containerEl, onSave) {
             getContext().extensionSettings.plot[`${moduleId}Modes`] = updated;
             
             await setActiveModeId(moduleId, updated[0].id);
+            await saveSettings();
+            
+            const modesNew = getModuleModes(moduleId);
+            const activeMode = modesNew.find(m => m.id === updated[0].id) || modesNew[0];
+            if (onSave) {
+                await onSave(activeMode);
+            }
             await show();
         }
-    });
-    
-    // Save
-    saveBtn.addEventListener('click', async () => {
-        const modes = getModuleModes(moduleId);
-        const mode = modes.find(m => m.id === currentModeId);
-        if (!mode) return;
-        
-        mode.name = modeNameInput.value.trim() || '未命名模式';
-        if (moduleId === 'goals') {
-            mode.presetId = presetEvalSelect.value;
-            mode.generationPresetId = presetGenSelect.value;
-        } else {
-            mode.presetId = presetSelect.value;
-        }
-        mode.useCustomConnection = connToggle.checked;
-        mode.connectionId = connSelect.value;
-        mode.useCustomReading = readToggle.checked;
-        
-        mode.reading.historyLimit = Number(readLimit.value) || 0;
-        delete mode.reading.limit;
-        mode.reading.injectCharacterDescription = drawer.querySelector('.plot-drawer-char-desc-chk').checked;
-        mode.reading.injectUserDescription = drawer.querySelector('.plot-drawer-user-desc-chk').checked;
-        mode.reading.injectCharacterLorebook = drawer.querySelector('.plot-drawer-wi-char-chk').checked;
-        mode.reading.injectChatLorebook = drawer.querySelector('.plot-drawer-wi-chat-chk').checked;
-        mode.reading.injectGlobalLorebook = drawer.querySelector('.plot-drawer-wi-global-chk').checked;
-        mode.reading.lorebookExcludePrefixes = drawer.querySelector('.plot-drawer-wi-exclude').value.trim();
-        mode.reading.lorebookIncludeFilter = drawer.querySelector('.plot-drawer-wi-include').value.trim();
-        mode.reading.customLorebookName = drawer.querySelector('.plot-drawer-wi-custom-select').value;
-        mode.reading.manuallySelectedEntries = [...lorebookSelections];
-        mode.reading.regexRules = [...localRegexRules];
-        mode.reading.disabledRegexIds = [...localDisabledRegexIds];
-        mode.reading.summaryJsExpression = drawer.querySelector('.plot-drawer-read-summary-expr').value.trim();
-        
-        if (moduleId === 'goals') {
-            mode.display = {
-                showDesc: drawer.querySelector('.plot-drawer-display-desc-chk').checked,
-                showStatus: drawer.querySelector('.plot-drawer-display-status-chk').checked,
-                showType: drawer.querySelector('.plot-drawer-display-type-chk').checked
-            };
-            
-            // Save badges
-            const finalBadges = {};
-            drawer.querySelectorAll('#plot-drawer-badges-rules-list .plot-badge-rule-row').forEach(row => {
-                const key = row.querySelector('.badge-key').value.trim();
-                const label = row.querySelector('.badge-label').value.trim();
-                const color = row.querySelector('.badge-color').value.trim();
-                const bgColor = row.querySelector('.badge-bg-color').value.trim();
-                const borderColor = row.querySelector('.badge-border-color').value.trim();
-                if (key && label) {
-                    finalBadges[key] = { label, color, bgColor, borderColor };
-                }
-            });
-            if (!getContext().extensionSettings.plot) getContext().extensionSettings.plot = {};
-            getContext().extensionSettings.plot.customBadges = finalBadges;
-            
-            // Save global goal injection settings
-            getContext().extensionSettings.plot.goalInjection = {
-                enabled: drawer.querySelector('.plot-drawer-inject-enabled-chk').checked,
-                template: drawer.querySelector('.plot-drawer-inject-template').value,
-                lineTemplate: drawer.querySelector('.plot-drawer-inject-line-template').value.trim()
-            };
-        }
-
-        if (moduleId === 'variables') {
-            if (!getContext().extensionSettings.plot) getContext().extensionSettings.plot = {};
-            getContext().extensionSettings.plot.variablesInjection = {
-                enabled: drawer.querySelector('.plot-drawer-var-inject-enabled-chk').checked,
-                injectAll: drawer.querySelector('.plot-drawer-var-inject-all-chk').checked,
-                template: drawer.querySelector('.plot-drawer-var-inject-template').value,
-                lineTemplate: drawer.querySelector('.plot-drawer-var-inject-line-template').value.trim()
-            };
-        }
-        
-        getContext().extensionSettings.plot[`${moduleId}Modes`] = modes;
-        getContext().saveSettingsDebounced?.();
-        
-        if (onSave) onSave(mode);
-        hide();
     });
     
     // ── Lorebook checklist rendering ──
@@ -1216,6 +1286,85 @@ export function createModuleConfigDrawer(moduleId, containerEl, onSave) {
             });
         };
 
+        const refreshRpgLayoutsList = (currentRpgConfig = null) => {
+            const listContainer = drawer.querySelector('#plot-drawer-rpg-layouts-list');
+            if (!listContainer) return;
+            listContainer.innerHTML = '';
+
+            const rpgFieldInput = drawer.querySelector('.plot-drawer-rpg-field-input');
+            const fieldKey = rpgFieldInput ? rpgFieldInput.value.trim() : 'category';
+            const goals = get('goals') || {};
+            const categories = new Set();
+            Object.values(goals).forEach(g => {
+                if (!g.deleted) {
+                    const val = g[fieldKey];
+                    if (val !== undefined && val !== null && String(val).trim() !== '') {
+                        categories.add(String(val).trim());
+                    }
+                }
+            });
+
+            const cats = Array.from(categories);
+            if (cats.length === 0) {
+                listContainer.innerHTML = `<div style="text-align:center; padding:10px; font-size:0.8em; opacity:0.6;">未检测到分类。请先在任务配置详情中，添加自定义分类属性字段并赋予值。</div>`;
+                return;
+            }
+
+            const CORE_KEYS = ['id', 'parentId', 'title', 'name', 'description', 'status', 'type', 'conditions', 'actions', 'injectLineTemplate', 'completedDetail', 'deleted', 'preRequisites', 'icon'];
+            
+            cats.forEach(cat => {
+                const catCfg = currentRpgConfig?.layouts?.[cat] || { layout: 'tree', showFields: [] };
+                
+                // Scan custom fields in goals belonging to this category
+                const attrKeys = new Set();
+                Object.values(goals).forEach(g => {
+                    if (!g.deleted && String(g[fieldKey] || '').trim() === cat) {
+                        Object.keys(g).forEach(k => {
+                            if (!CORE_KEYS.includes(k) && k !== fieldKey) {
+                                attrKeys.add(k);
+                            }
+                        });
+                    }
+                });
+
+                const row = document.createElement('div');
+                row.className = 'plot-rpg-layout-row';
+                row.dataset.category = cat;
+                row.style.cssText = 'display:flex; flex-direction:column; gap:4px; padding:6px 8px; background:rgba(255,255,255,0.03); border:1px solid var(--SmartThemeBorderColor); border-radius:4px; margin-bottom:4px; box-sizing:border-box; width:100%;';
+                
+                const attrsHtml = attrKeys.size > 0 
+                    ? Array.from(attrKeys).map(k => {
+                        const isChecked = catCfg.showFields?.includes(k);
+                        return `
+                            <label style="display:inline-flex; align-items:center; gap:3px; cursor:pointer; font-size:0.75em; background:rgba(0,0,0,0.15); padding:2px 5px; border-radius:3px; margin-right:4px; white-space:nowrap;">
+                                <input type="checkbox" class="rpg-attr-chk" data-attr="${k}" ${isChecked ? 'checked' : ''}> ${k}
+                            </label>
+                        `;
+                      }).join('')
+                    : `<span style="font-size:0.72em; opacity:0.5;">(无自定义属性字段，可在任务编辑中添加)</span>`;
+
+                row.innerHTML = `
+                    <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:4px;">
+                        <span style="font-weight:bold; font-size:0.85em; color:var(--SmartThemeEmColor);">${escapeHtml(cat)}</span>
+                        <div style="display:flex; align-items:center; gap:6px;">
+                            <span style="font-size:0.75em; opacity:0.7;">布局方式:</span>
+                            <select class="rpg-layout-select plot-select" style="padding:1px 4px; font-size:0.8em; height:22px; width:90px; min-width:90px !important;">
+                                <option value="tree" ${catCfg.layout === 'tree' ? 'selected' : ''}>树形层级</option>
+                                <option value="grid" ${catCfg.layout === 'grid' ? 'selected' : ''}>徽章网格</option>
+                                <option value="stats" ${catCfg.layout === 'stats' ? 'selected' : ''}>属性表格</option>
+                                <option value="list" ${catCfg.layout === 'list' ? 'selected' : ''}>扁平列表</option>
+                            </select>
+                        </div>
+                    </div>
+                    <div style="display:flex; flex-wrap:wrap; align-items:center; gap:2px; margin-top:2px; border-top:1px dashed rgba(255,255,255,0.05); padding-top:4px;">
+                        <span style="font-size:0.72em; opacity:0.7; margin-right:4px;">显示属性:</span>
+                        <div style="display:flex; flex-wrap:wrap; gap:2px; align-items:center;">${attrsHtml}</div>
+                    </div>
+                `;
+                listContainer.appendChild(row);
+            });
+        };
+
         const scanBtn = drawer.querySelector('#plot-drawer-scan-badges-btn');
         if (scanBtn) {
             const newScanBtn = scanBtn.cloneNode(true);
@@ -1225,7 +1374,7 @@ export function createModuleConfigDrawer(moduleId, containerEl, onSave) {
                 syncInputsToLocalBadges();
                 
                 const goals = get('goals') || {};
-                const CORE_KEYS = ['id', 'parentId', 'title', 'name', 'description', 'status', 'type', 'conditions', 'actions', 'injectLineTemplate', 'completedDetail'];
+                const CORE_KEYS = ['id', 'parentId', 'title', 'name', 'description', 'status', 'type', 'conditions', 'actions', 'injectLineTemplate', 'completedDetail', 'preRequisites', 'icon'];
                 const detectedKeys = new Set();
                 
                 Object.values(goals).forEach(goal => {
@@ -1287,6 +1436,7 @@ export function createModuleConfigDrawer(moduleId, containerEl, onSave) {
         if (moduleId === 'goals') {
             drawer.querySelector('#plot-goals-display-settings').style.display = 'block';
             drawer.querySelector('#plot-goals-badges-settings').style.display = 'block';
+            drawer.querySelector('#plot-goals-rpg-settings').style.display = 'block';
             drawer.querySelector('#plot-goals-injection-settings').style.display = 'block';
             drawer.querySelector('#plot-variables-injection-settings').style.display = 'none';
             
@@ -1296,6 +1446,32 @@ export function createModuleConfigDrawer(moduleId, containerEl, onSave) {
             drawer.querySelector('.plot-drawer-display-type-chk').checked = !!display.showType;
             
             refreshBadgesRulesList();
+            
+            // Load RPG panel settings
+            const rpgConfig = localConfig.rpgConfig || { enabled: false, categoryField: 'category', layouts: {} };
+            const rpgEnabledChk = drawer.querySelector('.plot-drawer-rpg-enabled-chk');
+            const rpgFieldInput = drawer.querySelector('.plot-drawer-rpg-field-input');
+            const rpgContainer = drawer.querySelector('.plot-rpg-config-container');
+            
+            if (rpgEnabledChk && rpgFieldInput && rpgContainer) {
+                rpgEnabledChk.checked = !!rpgConfig.enabled;
+                rpgFieldInput.value = rpgConfig.categoryField || 'category';
+                rpgContainer.style.display = rpgConfig.enabled ? 'flex' : 'none';
+                
+                rpgEnabledChk.onchange = () => {
+                    rpgContainer.style.display = rpgEnabledChk.checked ? 'flex' : 'none';
+                };
+                
+                const scanRpgBtn = drawer.querySelector('#plot-drawer-scan-rpg-btn');
+                if (scanRpgBtn) {
+                    scanRpgBtn.onclick = (e) => {
+                        e.preventDefault();
+                        refreshRpgLayoutsList(rpgConfig);
+                    };
+                }
+                
+                refreshRpgLayoutsList(rpgConfig);
+            }
             
             // Load injection settings
             const goalInject = getContext().extensionSettings.plot?.goalInjection || {
@@ -1324,6 +1500,8 @@ export function createModuleConfigDrawer(moduleId, containerEl, onSave) {
             if (displayGrp) displayGrp.style.display = 'none';
             const badgesGrp = drawer.querySelector('#plot-goals-badges-settings');
             if (badgesGrp) badgesGrp.style.display = 'none';
+            const rpgGrp = drawer.querySelector('#plot-goals-rpg-settings');
+            if (rpgGrp) rpgGrp.style.display = 'none';
             drawer.querySelector('#plot-goals-injection-settings').style.display = 'none';
             drawer.querySelector('#plot-variables-injection-settings').style.display = 'block';
 
@@ -1359,6 +1537,8 @@ export function createModuleConfigDrawer(moduleId, containerEl, onSave) {
             if (displayGrp) displayGrp.style.display = 'none';
             const badgesGrp = drawer.querySelector('#plot-goals-badges-settings');
             if (badgesGrp) badgesGrp.style.display = 'none';
+            const rpgGrp2 = drawer.querySelector('#plot-goals-rpg-settings');
+            if (rpgGrp2) rpgGrp2.style.display = 'none';
             drawer.querySelector('#plot-goals-injection-settings').style.display = 'none';
             drawer.querySelector('#plot-variables-injection-settings').style.display = 'none';
         }
@@ -1380,5 +1560,5 @@ export function createModuleConfigDrawer(moduleId, containerEl, onSave) {
         setTimeout(() => { drawer.classList.add('show'); }, 10);
     };
     
-    return { show, hide };
+    return { show, hide: hideOnly };
 }

@@ -22,7 +22,9 @@ function escapeHtml(text) {
     return String(text || '')
         .replace(/&/g, '&amp;')
         .replace(/</g, '&lt;')
-        .replace(/>/g, '&gt;');
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#39;');
 }
 
 export async function renderVariablesTab(containerEl) {
@@ -34,17 +36,17 @@ export async function renderVariablesTab(containerEl) {
     const modeSelect = rootEl.querySelector('#plot-variables-mode-select');
     const settingsBtn = rootEl.querySelector('#plot-variables-settings-btn');
 
-    const refreshModeDropdown = () => {
+    const refreshModeDropdown = async () => {
         const modes = getModuleModes('variables');
-        const activeId = getActiveModeId('variables');
+        const activeId = await getActiveModeId('variables');
         modeSelect.innerHTML = modes.map(m => `<option value="${m.id}" ${m.id === activeId ? 'selected' : ''}>${escapeHtml(m.name)}</option>`).join('');
     };
 
-    refreshModeDropdown();
+    await refreshModeDropdown();
 
     const { show: showConfigDrawer } = createModuleConfigDrawer('variables', rootEl, async (newCfg) => {
         console.log('[Plot Variables] Configuration updated:', newCfg);
-        refreshModeDropdown();
+        await refreshModeDropdown();
     });
 
     settingsBtn.addEventListener('click', () => {
@@ -53,7 +55,7 @@ export async function renderVariablesTab(containerEl) {
 
     modeSelect.addEventListener('change', async () => {
         await setActiveModeId('variables', modeSelect.value);
-        refreshModeDropdown();
+        await refreshModeDropdown();
         renderVariablesList();
     });
 

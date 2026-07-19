@@ -4,9 +4,9 @@
  * Converts the three main data stores (variables, goals, storylines) to
  * human-readable strings for prompt injection and macro substitution.
  *
- * Two formats per domain:
+ * Formats per domain:
  *   - Inline  (compact, for {{plot_state}} macro and injection blocks)
- *   - Block   (multiline list, for {{variables_list}} / {{goals_list}} / {{storyline_status}} in prompts)
+ *   - Block   (multiline lists, for {{plot_variables}} / {{plot_goals}} / {{plot_storyline}} in prompts)
  *
  * Both prompt-builder.js and injection.js import from here instead of
  * maintaining separate copies.

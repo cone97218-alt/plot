@@ -31,10 +31,11 @@ const MODULE_NAME = 'plot';
  */
 export function formatGoalLine(goal, defaultLineTemplate) {
     const tpl = goal.injectLineTemplate || defaultLineTemplate || "【{{title}}】{{desc}}";
+    const isLocked = goal.status === 'locked';
     
     let res = tpl
         .replace(/\{\{title\}\}/g, goal.title || '')
-        .replace(/\{\{desc\}\}/g, goal.description || '')
+        .replace(/\{\{desc\}\}/g, isLocked ? '已锁定' : (goal.description || ''))
         .replace(/\{\{status\}\}/g, goal.status || 'active')
         .replace(/\{\{type\}\}/g, goal.type || 'manual');
         
@@ -45,7 +46,8 @@ export function formatGoalLine(goal, defaultLineTemplate) {
     extraKeys.forEach(k => {
         const val = goal[k];
         const placeholder = new RegExp(`\\{\\{${k}\\}\\}`, 'g');
-        res = res.replace(placeholder, val !== undefined && val !== null ? String(val) : '');
+        const valStr = isLocked ? '' : (typeof val === 'object' && val !== null ? JSON.stringify(val) : (val !== undefined && val !== null ? String(val) : ''));
+        res = res.replace(placeholder, valStr);
     });
     
     // Clean up remaining placeholders
@@ -80,13 +82,42 @@ export function resolveGoalMacros(template, defaultLineTemplate) {
     // Pinned active goals — exposed as {{plot_goals_pinned}}, NOT auto-appended
     const pinnedGoals    = goalList.filter(g => (g.status === 'active' || !g.status) && pinnedIds.includes(g.id));
     
-    const res = template
+    let res = template
         .replace(/\{\{plot_goals_active\}\}/g,  formatList(activeGoals))
         .replace(/\{\{plot_goals_complete\}\}/g, formatList(completeGoals))
         .replace(/\{\{plot_goals_failed\}\}/g,   formatList(failedGoals))
         .replace(/\{\{plot_goals_hidden\}\}/g,   formatList(hiddenGoals))
         .replace(/\{\{plot_goals_all\}\}/g,      formatList(allGoals))
         .replace(/\{\{plot_goals_pinned\}\}/g,   formatList(pinnedGoals));
+
+    // Dynamically scan all unique categories from the current goal list
+    const uniqueCategories = new Set();
+    goalList.forEach(g => {
+        if (g.category && String(g.category).trim() !== '') {
+            uniqueCategories.add(String(g.category).trim().toLowerCase());
+        }
+    });
+    
+    const statuses = ['locked', 'unlocked', 'active', 'complete', 'failed', 'hidden'];
+
+    uniqueCategories.forEach(cat => {
+        const catSingular = cat;
+        const normalizedPlural = cat.endsWith('s') ? cat : cat + 's';
+        
+        statuses.forEach(statusVal => {
+            const filtered = goalList.filter(g => 
+                String(g.category || '').trim().toLowerCase() === catSingular && 
+                (g.status === statusVal || (statusVal === 'active' && !g.status))
+            );
+            
+            // Replace both singular and plural placeholders: e.g. {{plot_quests_active}} and {{plot_quest_active}}
+            const regexPlural = new RegExp(`\\{\\{plot_${normalizedPlural}_${statusVal}\\}\\}`, 'g');
+            const regexSingular = new RegExp(`\\{\\{plot_${catSingular}_${statusVal}\\}\\}`, 'g');
+            
+            res = res.replace(regexPlural, formatList(filtered));
+            res = res.replace(regexSingular, formatList(filtered));
+        });
+    });
         
     return res.trim();
 }
@@ -271,7 +302,9 @@ export function getInjectionMacros() {
         goalsStr = serializeGoalsInline();
     }
 
-    return {
+    const lineTemplate = goalInject.lineTemplate || "【{{title}}】{{desc}}";
+
+    const macros = {
         plot_state:          buildInjectionText().trim(),
         plot_variables:      resolveVariablesBlock(s),
         plot_goals:          goalsStr,
@@ -282,6 +315,32 @@ export function getInjectionMacros() {
         plot_goals_hidden:   serializeGoals('hidden'),
         plot_goals_all:      serializeGoals('all')
     };
+
+    // Dynamically scan all unique categories from the current goal list
+    const uniqueCategories = new Set();
+    const goals = get('goals') || {};
+    Object.values(goals).forEach(g => {
+        if (g.category && String(g.category).trim() !== '') {
+            uniqueCategories.add(String(g.category).trim().toLowerCase());
+        }
+    });
+    
+    const statuses = ['locked', 'unlocked', 'active', 'complete', 'failed', 'hidden'];
+
+    uniqueCategories.forEach(cat => {
+        const catSingular = cat;
+        const normalizedPlural = cat.endsWith('s') ? cat : cat + 's';
+        
+        statuses.forEach(status => {
+            const keySingular = `plot_${catSingular}_${status}`;
+            const keyPlural = `plot_${normalizedPlural}_${status}`;
+            
+            macros[keySingular] = resolveGoalMacros(`{{${keySingular}}}`, lineTemplate);
+            macros[keyPlural] = resolveGoalMacros(`{{${keyPlural}}}`, keySingular === keyPlural ? undefined : lineTemplate);
+        });
+    });
+
+    return macros;
 }
 
 /**

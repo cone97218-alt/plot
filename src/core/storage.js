@@ -4,6 +4,7 @@ import { migrate } from './migrator.js';
 import { set, get } from './store.js';
 import { getPlotValue, savePlotValue, clearAllPlotDB } from './indexeddb.js';
 import { registerDynamicVariableMacros } from '../utils/macro.js';
+import { injectIntoPrompt } from './injection.js';
 
 /**
  * Build the IndexedDB key for a backstage history record.
@@ -324,6 +325,13 @@ export async function savePlotData() {
         await savePlotValue(dbKey, history);
     } else {
         console.log(`[Plot Storage] Skipping backstage history save to key "${dbKey}" because loadedKey is "${loadedKey}"`);
+    }
+
+    // Proactively refresh extension prompt injection state!
+    try {
+        injectIntoPrompt();
+    } catch (e) {
+        console.warn('[Plot Storage] Failed to update prompt injection:', e);
     }
 }
 

@@ -22,6 +22,13 @@ async function safeLoadPlotData(source) {
     try {
         await loadPlotData();
         console.log(`[Plot Hooks] ${source}: Loaded plot data.`);
+        
+        // Proactively refresh extension prompt injection state!
+        try {
+            injectIntoPrompt();
+        } catch (e) {
+            console.warn('[Plot Hooks] Failed to update prompt injection after load:', e);
+        }
     } catch (e) {
         console.error(`[Plot Hooks] Failed to load plot data on "${source}":`, e);
     } finally {

@@ -853,6 +853,22 @@
     opacity: 0.35;
 }
 
+.plot-goal-card.is-locked {
+    opacity: 0.55;
+    filter: grayscale(0.5);
+    pointer-events: none; /* block all clicks on locked card */
+}
+
+/* Re-enable the edit button even on locked cards */
+.plot-goal-card.is-locked .plot-goal-action-btn {
+    pointer-events: auto;
+}
+
+.plot-goal-card.is-locked .plot-goal-title {
+    opacity: 0.55;
+    font-style: italic;
+}
+
 /* Custom checkbox / check circle icon */
 .plot-goal-status-icon {
     font-size: 1.1em;
@@ -976,6 +992,19 @@
     color: var(--SmartThemeBodyColor);
     border-color: var(--SmartThemeBorderColor);
     opacity: 0.45;
+}
+
+.plot-goal-status-badge.locked {
+    color: var(--SmartThemeBodyColor);
+    border-color: var(--SmartThemeBorderColor);
+    opacity: 0.5;
+    font-style: italic;
+}
+
+.plot-goal-status-badge.unlocked {
+    color: var(--SmartThemeEmColor);
+    border-color: var(--SmartThemeEmColor);
+    opacity: 0.75;
 }
 
 /* Action button stylings */

@@ -250,15 +250,9 @@ export function evaluateVariableGoals() {
                         completedGoalActions.push(goal.actions || []);
                         console.log(`[Plot GoalEngine] Goal "${goal.id}" complete by Variable condition: ${goal.conditions.variable}`);
                         
-                        if (typeof toastr !== 'undefined') {
-                            const usedVars = Object.keys(context).filter(k => goal.conditions.variable.includes(k));
-                            const ctxDesc = usedVars.map(k => `${k} = ${context[k]}`).join(', ');
-                            toastr.success(
-                                `完成方式：变量判定\n触发条件：${goal.conditions.variable} (当前: ${ctxDesc})`,
-                                `🎉 剧情目标自动达成：【${goal.title}】`,
-                                { timeOut: 12000, closeButton: true }
-                            );
-                        }
+                        const usedVars = Object.keys(context).filter(k => goal.conditions.variable.includes(k));
+                        const ctxDesc = usedVars.map(k => `${k} = ${context[k]}`).join(', ');
+                        goal.completedDetail = `完成方式：变量判定\n触发条件：${goal.conditions.variable} (当前: ${ctxDesc})`;
                         return; // Skip failure check if completed
                     }
                 }
@@ -272,15 +266,9 @@ export function evaluateVariableGoals() {
                         completedGoalActions.push(goal.actions || []);
                         console.log(`[Plot GoalEngine] Goal "${goal.id}" failed by Variable condition: ${goal.conditions.variableFail}`);
                         
-                        if (typeof toastr !== 'undefined') {
-                            const usedVars = Object.keys(context).filter(k => goal.conditions.variableFail.includes(k));
-                            const ctxDesc = usedVars.map(k => `${k} = ${context[k]}`).join(', ');
-                            toastr.error(
-                                `失败方式：变量判定\n触发条件：${goal.conditions.variableFail} (当前: ${ctxDesc})`,
-                                `❌ 剧情目标自动失败：【${goal.title}】`,
-                                { timeOut: 12000, closeButton: true }
-                            );
-                        }
+                        const usedVars = Object.keys(context).filter(k => goal.conditions.variableFail.includes(k));
+                        const ctxDesc = usedVars.map(k => `${k} = ${context[k]}`).join(', ');
+                        goal.completedDetail = `失败方式：变量判定\n触发条件：${goal.conditions.variableFail} (当前: ${ctxDesc})`;
                     }
                 }
             }
@@ -330,16 +318,10 @@ export function evaluateKeywordGoals(messageText) {
                     completedGoalActions.push(goal.actions || []);
                     console.log(`[Plot GoalEngine] Goal "${goal.id}" complete by Keyword match: ${matchedKw}`);
                     
-                    if (typeof toastr !== 'undefined') {
-                        const startIdx = Math.max(0, messageText.toLowerCase().indexOf(matchedKw.toLowerCase()) - 15);
-                        const endIdx = Math.min(messageText.length, messageText.toLowerCase().indexOf(matchedKw.toLowerCase()) + matchedKw.length + 15);
-                        const snippet = (startIdx > 0 ? '...' : '') + messageText.substring(startIdx, endIdx) + (endIdx < messageText.length ? '...' : '');
-                        toastr.success(
-                            `完成方式：关键词判定\n触发词："${matchedKw}"\n上下文："${snippet}"`,
-                            `🎉 剧情目标自动达成：【${goal.title}】`,
-                            { timeOut: 12000, closeButton: true }
-                        );
-                    }
+                    const startIdx = Math.max(0, messageText.toLowerCase().indexOf(matchedKw.toLowerCase()) - 15);
+                    const endIdx = Math.min(messageText.length, messageText.toLowerCase().indexOf(matchedKw.toLowerCase()) + matchedKw.length + 15);
+                    const snippet = (startIdx > 0 ? '...' : '') + messageText.substring(startIdx, endIdx) + (endIdx < messageText.length ? '...' : '');
+                    goal.completedDetail = `完成方式：关键词判定\n触发词："${matchedKw}"\n上下文："${snippet}"`;
                     return; // Skip failure check if completed
                 }
             }
@@ -359,16 +341,10 @@ export function evaluateKeywordGoals(messageText) {
                     completedGoalActions.push(goal.actions || []);
                     console.log(`[Plot GoalEngine] Goal "${goal.id}" failed by Keyword match: ${matchedFailKw}`);
                     
-                    if (typeof toastr !== 'undefined') {
-                        const startIdx = Math.max(0, messageText.toLowerCase().indexOf(matchedFailKw.toLowerCase()) - 15);
-                        const endIdx = Math.min(messageText.length, messageText.toLowerCase().indexOf(matchedFailKw.toLowerCase()) + matchedFailKw.length + 15);
-                        const snippet = (startIdx > 0 ? '...' : '') + messageText.substring(startIdx, endIdx) + (endIdx < messageText.length ? '...' : '');
-                        toastr.error(
-                            `失败方式：关键词判定\n触发词："${matchedFailKw}"\n上下文："${snippet}"`,
-                            `❌ 剧情目标自动失败：【${goal.title}】`,
-                            { timeOut: 12000, closeButton: true }
-                        );
-                    }
+                    const startIdx = Math.max(0, messageText.toLowerCase().indexOf(matchedFailKw.toLowerCase()) - 15);
+                    const endIdx = Math.min(messageText.length, messageText.toLowerCase().indexOf(matchedFailKw.toLowerCase()) + matchedFailKw.length + 15);
+                    const snippet = (startIdx > 0 ? '...' : '') + messageText.substring(startIdx, endIdx) + (endIdx < messageText.length ? '...' : '');
+                    goal.completedDetail = `失败方式：关键词判定\n触发词："${matchedFailKw}"\n上下文："${snippet}"`;
                 }
             }
         }
@@ -386,6 +362,55 @@ export function evaluateKeywordGoals(messageText) {
     }
 }
 
+let _isCheckingPreReqs = false;
+export function checkPreRequisites() {
+    if (_isCheckingPreReqs) return;
+    _isCheckingPreReqs = true;
+    try {
+        const goals = { ...(get('goals') || {}) };
+        let changed = false;
+        
+        Object.values(goals).forEach(goal => {
+            if (goal.deleted) return;
+            const preReqs = goal.preRequisites;
+            if (!preReqs || !Array.isArray(preReqs) || preReqs.length === 0) return;
+            
+            // Check if all pre-requisites are completed
+            const allCompleted = preReqs.every(reqId => {
+                const reqGoal = goals[reqId];
+                return reqGoal && reqGoal.status === 'complete';
+            });
+            
+            if (allCompleted) {
+                // If currently locked, unlock it and make it unlocked (or active)
+                if (goal.status === 'locked') {
+                    goal.status = 'unlocked';
+                    changed = true;
+                    console.log(`[Plot GoalEngine] Goal "${goal.id}" unlocked because pre-requisites [${preReqs.join(', ')}] are completed.`);
+                }
+            } else {
+                // If pre-requisites not complete, enforce locked status
+                if (goal.status === 'active' || goal.status === 'unlocked' || !goal.status) {
+                    goal.status = 'locked';
+                    changed = true;
+                    console.log(`[Plot GoalEngine] Goal "${goal.id}" locked because pre-requisites [${preReqs.join(', ')}] are not completed.`);
+                }
+            }
+        });
+        
+        if (changed) {
+            set('goals', goals);
+            savePlotData();
+            
+            document.dispatchEvent(new CustomEvent('plot:storeUpdated', { 
+                detail: { changed: { source: 'prerequisites_update' } } 
+            }));
+        }
+    } finally {
+        _isCheckingPreReqs = false;
+    }
+}
+
 export function serializeForPrompt() {
     // Rely on centralized serialisation in serializers.js
     return serializeGoals();
@@ -395,3 +420,11 @@ export function serializeForPrompt() {
 subscribe('variables', () => {
     evaluateVariableGoals();
 });
+
+// Auto-evaluate prerequisites whenever goals update
+subscribe('goals', () => {
+    checkPreRequisites();
+});
+
+// Run initial prerequisites check on load
+setTimeout(checkPreRequisites, 50);

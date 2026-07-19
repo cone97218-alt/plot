@@ -18,6 +18,17 @@ import { buildContext } from '../core/context-reader.js';
 
 const MODULE_NAME = 'plot';
 let lastFocusedTextarea = null;
+let activeRenderBlockList = null;
+
+// Helper to escape HTML safely
+function escapeHtml(text) {
+    return String(text || '')
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#39;');
+}
 
 const MODULES = [
     { id: 'variables', label: '变量判定',   desc: '变量判定模块的提示词配置' },
@@ -29,11 +40,11 @@ const MODULES = [
 
 const PLACEHOLDERS = {
     variables:  [
-        { key: '{{variables_list}}', desc: '当前所有已注册变量键值列表' },
+        { key: '{{plot_variables}}', desc: '当前所有已注册变量键值列表' },
         { key: '{{chat_history}}',   desc: '对话历史' },
     ],
     goals:      [
-        { key: '{{goals_list}}',   desc: '当前未完成目标列表' },
+        { key: '{{plot_goals_active}}',   desc: '当前进行中/活跃的目标列表' },
         { key: '{{chat_history}}', desc: '对话历史' },
     ],
     goals_ai_gen: [
@@ -44,7 +55,7 @@ const PLACEHOLDERS = {
         { key: '{{summary}}',      desc: '对话总结' },
     ],
     storyline:  [
-        { key: '{{storyline_status}}', desc: '当前激活故事线阶段信息' },
+        { key: '{{plot_storyline}}', desc: '当前激活故事线阶段信息' },
         { key: '{{chat_history}}',     desc: '对话历史' },
     ],
     backstage:  [
@@ -96,40 +107,150 @@ function getPresetSettings() {
 }
 
 function saveSettings() {
-    getContext().saveSettingsDebounced?.();
+    getContext?.()?.saveSettingsDebounced?.();
 }
 
 // ── Full-screen editable modal ─────────────────────────────────────────────────
 
-function showEditModal(title, initialText, onSave) {
+function showBlockEditModal(startBlock, moduleId) {
     let overlay = document.getElementById('plot-edit-modal-overlay');
     if (!overlay) {
         overlay = document.createElement('div');
         overlay.id = 'plot-edit-modal-overlay';
         document.body.appendChild(overlay);
     }
-    overlay.style.cssText = `position:fixed;top:0;left:0;width:100vw;height:100vh;background-color:rgba(var(--SmartThemeBlurTintColor-rgb),1);color:var(--SmartThemeBodyColor);z-index:999999;display:flex;flex-direction:column;padding:15px;box-sizing:border-box;`;
+    overlay.style.cssText = `
+        position: fixed;
+        top: 0;
+        left: 0;
+        width: 100vw;
+        height: 100vh;
+        background-color: rgba(var(--SmartThemeBlurTintColor-rgb), 0.95);
+        color: var(--SmartThemeBodyColor);
+        z-index: 999999;
+        display: flex;
+        flex-direction: column;
+        padding: 15px;
+        box-sizing: border-box;
+    `;
     overlay.innerHTML = `
-        <div style="flex:1;display:flex;flex-direction:column;height:100%;box-sizing:border-box;gap:10px;">
-            <div style="display:flex;justify-content:space-between;align-items:center;border-bottom:1px solid var(--SmartThemeBorderColor);padding-bottom:8px;flex-shrink:0;">
-                <h3 style="margin:0;color:var(--SmartThemeEmColor);font-size:1em;font-weight:bold;">${title}</h3>
-                <div style="display:flex;gap:6px;">
-                    <button id="plot-edit-modal-save" class="menu_button plot-btn" style="padding:3px 10px;font-size:0.85em;"><i class="fa-solid fa-check"></i> 保存</button>
-                    <i id="plot-edit-modal-close" class="fa-solid fa-xmark" style="cursor:pointer;font-size:1.3em;color:var(--SmartThemeEmColor);padding:3px 6px;"></i>
-                </div>
+        <div style="flex:1; display:flex; flex-direction:column; height:100%; box-sizing:border-box; gap:10px;">
+            <!-- Header Row 1: Title Input + Close Icon -->
+            <div style="display:flex; justify-content:space-between; align-items:center; border-bottom:1px solid var(--SmartThemeBorderColor); padding-bottom:8px; flex-shrink:0; gap:10px;">
+                <span style="font-size:0.8em; font-weight:bold; opacity:0.8; white-space:nowrap;">编辑块名称：</span>
+                <input type="text" id="plot-edit-modal-name" class="plot-input" 
+                    placeholder="请输入块名称..."
+                    style="flex:1; font-weight:bold; font-size:0.9em; height:26px; padding:2px 8px; background:var(--SmartThemeInputBgColor); border:1px solid var(--SmartThemeBorderColor); border-radius:4px; color:var(--SmartThemeEmColor); outline:none;">
+                <i id="plot-edit-modal-close" class="fa-solid fa-xmark" style="cursor:pointer; font-size:1.3em; color:var(--SmartThemeEmColor); padding:3px 6px;"></i>
             </div>
-            <textarea id="plot-edit-modal-ta" class="plot-input"
-                style="flex:1;width:100%;font-family:monospace;font-size:0.92em;line-height:1.5;background:var(--SmartThemeInputBgColor);color:var(--SmartThemeInputTextColor);border:1px solid var(--SmartThemeInputBorderColor);border-radius:4px;resize:none;padding:12px;box-sizing:border-box;">${initialText}</textarea>
+            <!-- Header Row 2: Navigation (Prev, Dropdown, Next) -->
+            <div style="display:flex; align-items:center; gap:8px; flex-shrink:0;">
+                <button id="plot-edit-modal-prev" class="menu_button plot-btn" style="padding:4px 10px; font-size:0.8em; white-space:nowrap;">
+                    <i class="fa-solid fa-chevron-left"></i> 上一个
+                </button>
+                <select id="plot-edit-modal-select" class="plot-select" style="flex:1; height:26px; font-size:0.8em; padding:0 6px; border:1px solid var(--SmartThemeBorderColor); background:var(--SmartThemeInputBgColor); color:var(--SmartThemeBodyColor); cursor:pointer;">
+                </select>
+                <button id="plot-edit-modal-next" class="menu_button plot-btn" style="padding:4px 10px; font-size:0.8em; white-space:nowrap;">
+                    下一个 <i class="fa-solid fa-chevron-right"></i>
+                </button>
+            </div>
+            <!-- Textarea Editor -->
+            <textarea id="plot-edit-modal-ta" class="plot-input" spellcheck="false" autocomplete="off" autocapitalize="off"
+                style="flex:1; width:100%; font-family:monospace; font-size:0.9em; line-height:1.5; background:var(--SmartThemeInputBgColor); color:var(--SmartThemeInputTextColor); border:1px solid var(--SmartThemeInputBorderColor); border-radius:4px; resize:none; padding:12px; box-sizing:border-box;"></textarea>
         </div>`;
-    overlay.querySelector('#plot-edit-modal-save').addEventListener('click', () => {
-        const val = overlay.querySelector('#plot-edit-modal-ta').value;
-        onSave(val);
-        overlay.style.display = 'none';
+
+    const nameInput = overlay.querySelector('#plot-edit-modal-name');
+    const ta = overlay.querySelector('#plot-edit-modal-ta');
+    const prevBtn = overlay.querySelector('#plot-edit-modal-prev');
+    const nextBtn = overlay.querySelector('#plot-edit-modal-next');
+    const selectEl = overlay.querySelector('#plot-edit-modal-select');
+
+    const blocks = getLiveBlocks(moduleId);
+    let currentBlock = startBlock;
+
+    const saveCurrent = () => {
+        if (!currentBlock) return;
+        
+        // Clone the block to bypass frozen object mutations
+        const updatedBlock = {
+            ...currentBlock,
+            name: nameInput.value,
+            content: ta.value,
+            moduleId: moduleId // Force explicit moduleId
+        };
+
+        saveBlock(updatedBlock);
+        saveSettings();
+
+        // Update active array reference so changes persist during modal navigation
+        const idx = blocks.findIndex(b => b.identifier === currentBlock.identifier);
+        if (idx !== -1) {
+            blocks[idx] = updatedBlock;
+        }
+        currentBlock = updatedBlock;
+    };
+
+    const loadBlockData = (block) => {
+        currentBlock = block;
+        nameInput.value = block.name;
+        ta.value = block.content;
+
+        const idx = blocks.findIndex(b => b.identifier === block.identifier);
+        prevBtn.disabled = idx <= 0;
+        nextBtn.disabled = idx === -1 || idx >= blocks.length - 1;
+
+        // Update select value
+        selectEl.value = block.identifier;
+    };
+
+    // Populate dropdown options
+    selectEl.innerHTML = blocks.map((b, i) => `
+        <option value="${b.identifier}">${escapeHtml(b.name || '未命名')} (${ROLE_LABELS[b.role] || b.role})</option>
+    `).join('');
+
+    selectEl.addEventListener('change', (e) => {
+        saveCurrent();
+        const nextBlock = blocks.find(b => b.identifier === e.target.value);
+        if (nextBlock) {
+            loadBlockData(nextBlock);
+        }
     });
-    overlay.querySelector('#plot-edit-modal-close').addEventListener('click', () => {
-        overlay.style.display = 'none';
+
+    prevBtn.addEventListener('click', () => {
+        const idx = blocks.findIndex(b => b.identifier === currentBlock.identifier);
+        if (idx > 0) {
+            saveCurrent();
+            loadBlockData(blocks[idx - 1]);
+        }
     });
-    overlay.addEventListener('click', e => { if (e.target === overlay) overlay.style.display = 'none'; });
+
+    nextBtn.addEventListener('click', () => {
+        const idx = blocks.findIndex(b => b.identifier === currentBlock.identifier);
+        if (idx !== -1 && idx < blocks.length - 1) {
+            saveCurrent();
+            loadBlockData(blocks[idx + 1]);
+        }
+    });
+
+    // Close listeners
+    const doClose = () => {
+        try {
+            saveCurrent();
+            activeRenderBlockList?.();
+            toastr.success('全屏修改已保存');
+        } catch (err) {
+            console.error('Error auto-saving on full screen modal close:', err);
+            toastr.error('全屏保存失败，请检查控制台');
+        } finally {
+            overlay.style.display = 'none';
+        }
+    };
+
+    overlay.querySelector('#plot-edit-modal-close').onclick = doClose;
+    overlay.onclick = e => { if (e.target === overlay) doClose(); };
+
+    // Initial load
+    loadBlockData(startBlock);
     overlay.style.display = 'flex';
 }
 
@@ -170,29 +291,30 @@ function addCustomBlock(moduleId) {
     return block;
 }
 
-/** Move a block up (lower order) or down (higher order) relative to its neighbours */
-function moveBlock(moduleId, identifier, direction) {
-    const blocks = getLiveBlocks(moduleId);
-    const idx = blocks.findIndex(b => b.identifier === identifier);
-    if (idx === -1) return;
-
-    const swapIdx = direction === 'up' ? idx - 1 : idx + 1;
-    if (swapIdx < 0 || swapIdx >= blocks.length) return;
-
-    const a = blocks[idx];
-    const b = blocks[swapIdx];
-    const tempOrder = a.order;
-    a.order = b.order;
-    b.order = tempOrder;
-
-    // Ensure orders are at least 1 apart; if equal, adjust
-    if (a.order === b.order) {
-        if (direction === 'up') a.order = b.order - 1;
-        else a.order = b.order + 1;
-    }
-
-    saveBlock(a);
-    saveBlock(b);
+/** Duplicate / clone a prompt block */
+function duplicateBlock(moduleId, sourceBlock) {
+    const id = `custom_${moduleId}_${Date.now()}`;
+    const newBlock = {
+        identifier: id,
+        name: `${sourceBlock.name} 副本`,
+        role: sourceBlock.role,
+        order: (sourceBlock.order ?? 0) + 1,
+        enabled: sourceBlock.enabled ?? true,
+        builtin: false,
+        moduleId: sourceBlock.moduleId || moduleId,
+        content: sourceBlock.content || ''
+    };
+    saveBlock(newBlock);
+    
+    // Normalize order sequences to 10, 20, 30...
+    const liveBlocks = getLiveBlocks(moduleId);
+    liveBlocks.sort((a, b) => (a.order ?? 0) - (b.order ?? 0));
+    liveBlocks.forEach((b, idx) => {
+        b.order = (idx + 1) * 10;
+        saveBlock(b, moduleId);
+    });
+    
+    saveSettings();
 }
 
 // ── Role badge colours ─────────────────────────────────────────────────────────
@@ -245,6 +367,14 @@ export async function renderPromptsTab(containerEl) {
             cheatBody.style.display = open ? 'none' : 'flex';
             cheatIcon.className = open ? 'fa-solid fa-chevron-down' : 'fa-solid fa-chevron-up';
         });
+
+        // Order manager popup modal button listener
+        const orderBtn = containerEl.querySelector('#pt-order-btn');
+        if (orderBtn) {
+            orderBtn.addEventListener('click', () => {
+                showOrderModal(currentModule);
+            });
+        }
 
         renderAll();
     };
@@ -380,8 +510,176 @@ export async function renderPromptsTab(containerEl) {
         });
     };
 
+    // ── Order manager (Modal popup drag-and-drop) ──────────────────────────────
+    const showOrderModal = (moduleId) => {
+        let overlay = document.getElementById('plot-order-modal-overlay');
+        if (!overlay) {
+            overlay = document.createElement('div');
+            overlay.id = 'plot-order-modal-overlay';
+            document.body.appendChild(overlay);
+        }
+        overlay.style.cssText = `
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100vw;
+            height: 100vh;
+            background-color: rgba(var(--SmartThemeBlurTintColor-rgb), 0.95);
+            color: var(--SmartThemeBodyColor);
+            z-index: 999999;
+            display: flex;
+            flex-direction: column;
+            padding: 15px;
+            box-sizing: border-box;
+        `;
+        overlay.innerHTML = `
+            <div style="flex:1; display:flex; flex-direction:column; height:100%; box-sizing:border-box; gap:10px;">
+                <div style="display:flex; justify-content:space-between; align-items:center; border-bottom:1px solid var(--SmartThemeBorderColor); padding-bottom:8px; flex-shrink:0;">
+                    <h3 style="margin:0; color:var(--SmartThemeEmColor); font-size:1.05em; font-weight:bold; display:flex; align-items:center; gap:8px;">
+                        <i class="fa-solid fa-bars-staggered"></i> 顺序管理 (拖拽排序)
+                    </h3>
+                    <div style="display:flex; gap:6px;">
+                        <button id="plot-order-modal-close-btn" class="menu_button plot-btn" style="padding:3px 10px; font-size:0.85em;">
+                            <i class="fa-solid fa-check"></i> 完成
+                        </button>
+                        <i id="plot-order-modal-close-icon" class="fa-solid fa-xmark" style="cursor:pointer; font-size:1.3em; color:var(--SmartThemeEmColor); padding:3px 6px;"></i>
+                    </div>
+                </div>
+                <p style="margin:0; font-size:0.75em; opacity:0.7; flex-shrink:0;">按住 <i class="fa-solid fa-grip-vertical"></i> 拖拽下列项可直接调整提示词的注入顺序：</p>
+                <div id="plot-order-modal-list" style="flex:1; overflow-y:auto; display:flex; flex-direction:column; gap:6px; padding-right:4px;"></div>
+            </div>
+        `;
+
+        const listContainer = overlay.querySelector('#plot-order-modal-list');
+        const blocks = getLiveBlocks(moduleId);
+
+        const renderModalItems = () => {
+            listContainer.innerHTML = '';
+            blocks.forEach((block) => {
+                const item = document.createElement('div');
+                item.className = 'pt-order-item';
+                item.dataset.id = block.identifier;
+                item.style.cssText = `
+                    display: flex;
+                    align-items: center;
+                    gap: 8px;
+                    padding: 8px 12px;
+                    background: var(--SmartThemeInputBgColor);
+                    color: var(--SmartThemeBodyColor);
+                    border: 1px solid var(--SmartThemeBorderColor);
+                    border-radius: 4px;
+                    cursor: grab;
+                    user-select: none;
+                    font-size: 0.82em;
+                    transition: opacity 0.2s, background-color 0.2s;
+                    touch-action: none;
+                `;
+
+                const roleBg = ROLE_COLORS[block.role] || 'rgba(120,120,120,0.15)';
+                const roleLabel = ROLE_LABELS[block.role] || block.role;
+
+                item.innerHTML = `
+                    <i class="fa-solid fa-grip-vertical" style="color: var(--SmartThemeBodyColor); opacity: 0.5; cursor: grab;"></i>
+                    <span style="font-weight: bold; flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">${escapeHtml(block.name)}</span>
+                    <span style="font-size: 0.75em; background: ${roleBg}; padding: 1px 4px; border-radius: 3px; font-weight: bold; white-space: nowrap;">${roleLabel}</span>
+                `;
+
+                // Unified Pointer Event listeners for both Mobile Touch and Desktop Mouse
+                item.addEventListener('pointerdown', (e) => {
+                    // Only left click/touch
+                    if (e.button !== 0 && e.pointerType === 'mouse') return;
+
+                    item.classList.add('dragging');
+                    item.style.opacity = '0.6';
+                    item.style.border = '1px dashed var(--SmartThemeEmColor)';
+
+                    try {
+                        item.setPointerCapture(e.pointerId);
+                    } catch (err) {}
+                    e.stopPropagation();
+                });
+
+                item.addEventListener('pointermove', (e) => {
+                    if (!item.classList.contains('dragging')) return;
+                    e.stopPropagation();
+
+                    const clientY = e.clientY;
+                    const siblings = [...listContainer.querySelectorAll('.pt-order-item:not(.dragging):not(#plot-drag-line)')];
+                    const nextSibling = siblings.find(sibling => {
+                        const box = sibling.getBoundingClientRect();
+                        return clientY <= box.top + box.height / 2;
+                    });
+
+                    let dragLine = listContainer.querySelector('#plot-drag-line');
+                    if (!dragLine) {
+                        dragLine = document.createElement('div');
+                        dragLine.id = 'plot-drag-line';
+                        dragLine.style.cssText = 'height: 4px; background: var(--SmartThemeEmColor); border-radius: 2px; margin: 4px 0; transition: all 0.1s;';
+                    }
+
+                    if (nextSibling) {
+                        listContainer.insertBefore(dragLine, nextSibling);
+                    } else {
+                        listContainer.appendChild(dragLine);
+                    }
+                });
+
+                const onPointerUp = (e) => {
+                    if (!item.classList.contains('dragging')) return;
+                    item.classList.remove('dragging');
+                    item.style.opacity = '1';
+                    item.style.border = '1px solid var(--SmartThemeBorderColor)';
+
+                    try {
+                        item.releasePointerCapture(e.pointerId);
+                    } catch (err) {}
+
+                    const dragLine = listContainer.querySelector('#plot-drag-line');
+                    if (dragLine) {
+                        listContainer.insertBefore(item, dragLine);
+                        dragLine.remove();
+                    }
+
+                    // Save new sequence when drag ends
+                    const reorderedIds = [...listContainer.querySelectorAll('.pt-order-item')].map(el => el.dataset.id);
+                    const blockMap = {};
+                    blocks.forEach(b => { blockMap[b.identifier] = b; });
+
+                    reorderedIds.forEach((id, newIndex) => {
+                        const b = blockMap[id];
+                        if (b) {
+                            b.order = (newIndex + 1) * 10;
+                            saveBlock(b, moduleId);
+                        }
+                    });
+
+                    saveSettings();
+                    renderBlockList();
+                };
+
+                item.addEventListener('pointerup', onPointerUp);
+                item.addEventListener('pointercancel', onPointerUp);
+
+                listContainer.appendChild(item);
+            });
+        };
+
+        renderModalItems();
+
+        const closeModal = () => {
+            overlay.style.display = 'none';
+        };
+
+        overlay.querySelector('#plot-order-modal-close-btn').addEventListener('click', closeModal);
+        overlay.querySelector('#plot-order-modal-close-icon').addEventListener('click', closeModal);
+        overlay.addEventListener('click', e => { if (e.target === overlay) closeModal(); });
+
+        overlay.style.display = 'flex';
+    };
+
     // ── Block list ─────────────────────────────────────────────────────────────
     const renderBlockList = () => {
+        activeRenderBlockList = renderBlockList;
         const list = containerEl.querySelector('#pt-block-list');
         if (!list) return;
 
@@ -399,52 +697,51 @@ export async function renderPromptsTab(containerEl) {
             const isLast = idx === blocks.length - 1;
 
             card.innerHTML = `
-                <!-- Two-row Responsive Header -->
-                <div style="display:flex; flex-direction:column; gap:6px; padding:6px 8px; background:rgba(0,0,0,0.03);">
-                    <!-- Row 1: Toggle + Name + Badges -->
-                    <div style="display:flex; align-items:center; gap:8px; width:100%;">
+                <div style="display:flex; align-items:center; justify-content:space-between; gap:6px; padding:6px 8px; background:rgba(0,0,0,0.03); flex-wrap:nowrap; width:100%; box-sizing:border-box;">
+                    <!-- Left: Toggle + Role + Name + Badges -->
+                    <div style="display:flex; align-items:center; gap:6px; flex:1; min-width:0;">
                         <!-- Enable toggle -->
-                        <label class="plot-switch" style="flex-shrink:0;">
+                        <label class="plot-switch" style="flex-shrink:0; transform: scale(0.8); margin: 0;">
                             <input type="checkbox" class="blk-toggle" ${block.enabled ? 'checked' : ''}>
                             <span class="plot-switch-slider"></span>
                         </label>
+                        
+                        <!-- Role selector (narrowed down) -->
+                        <select class="blk-role"
+                            style="font-size:0.72em; height:22px; width:44px !important; min-width:44px !important; max-width:44px !important; padding:0 !important; text-align-last:center; background:${roleBg}; border-radius:3px; flex-shrink:0; border:1px solid var(--SmartThemeBorderColor); color:var(--SmartThemeBodyColor); cursor:pointer; -webkit-appearance:none; -moz-appearance:none; appearance:none;">
+                            <option value="system"    ${block.role==='system'    ? 'selected':''}>Sys</option>
+                            <option value="user"      ${block.role==='user'      ? 'selected':''}>Usr</option>
+                            <option value="assistant" ${block.role==='assistant' ? 'selected':''}>AI</option>
+                        </select>
+                        
                         <!-- Name field — always editable -->
                         <input type="text" class="blk-name"
                             value="${block.name.replace(/"/g,'&quot;')}"
                             placeholder="请输入块名称..."
                             onfocus="this.style.borderBottomColor='var(--SmartThemeEmColor)'"
                             onblur="this.style.borderBottomColor='transparent'"
-                            style="flex:1; min-width:0; font-size:0.85em; font-weight:bold; color:var(--SmartThemeEmColor); background:transparent; border:none; border-bottom:1px solid transparent; outline:none; padding:1px 0;">
+                            style="width:90px !important; min-width:90px !important; max-width:90px !important; flex:none; font-size:0.82em; font-weight:bold; color:var(--SmartThemeEmColor); background:transparent; border:none; border-bottom:1px solid transparent; outline:none; padding:1px 0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">
+                            
                         <!-- Badges -->
-                        <div style="display:flex; gap:4px; flex-shrink:0; align-items:center;">
+                        <div style="display:flex; gap:2px; flex-shrink:0; align-items:center;">
                             ${block.moduleId === 'global'
-                                ? '<span style="font-size:0.68em; color:var(--SmartThemeQuoteColor); background:rgba(255,165,0,0.15); padding:1px 5px; border-radius:3px; font-weight:bold; white-space:nowrap;">全局</span>'
+                                ? '<span style="font-size:0.65em; color:var(--SmartThemeQuoteColor); background:rgba(255,165,0,0.12); padding:1px 4px; border-radius:3px; font-weight:bold; white-space:nowrap;">全局</span>'
                                 : ''}
                             ${block.builtin
-                                ? '<span style="font-size:0.68em; color:var(--SmartThemeBodyColor); background:rgba(128,128,128,0.15); padding:1px 5px; border-radius:3px; font-weight:bold; white-space:nowrap;">内置</span>'
+                                ? '<span style="font-size:0.65em; color:var(--SmartThemeBodyColor); background:rgba(128,128,128,0.12); padding:1px 4px; border-radius:3px; font-weight:bold; white-space:nowrap;">内置</span>'
                                 : ''}
                         </div>
                     </div>
-                    <!-- Row 2: Role Selector + Action Buttons -->
-                    <div style="display:flex; align-items:center; justify-content:space-between; gap:8px; width:100%; border-top:1px solid rgba(255,255,255,0.05); padding-top:5px;">
-                        <!-- Role selector -->
-                        <select class="blk-role plot-select"
-                            style="font-size:0.75em; height:22px; padding:0 4px; background:${roleBg}; border-radius:3px; flex-shrink:0; border:1px solid var(--SmartThemeBorderColor); color:var(--SmartThemeBodyColor); cursor:pointer;">
-                            <option value="system"    ${block.role==='system'    ? 'selected':''}>System</option>
-                            <option value="user"      ${block.role==='user'      ? 'selected':''}>User</option>
-                            <option value="assistant" ${block.role==='assistant' ? 'selected':''}>AI</option>
-                        </select>
-                        <!-- Action buttons -->
-                        <div style="display:flex; gap:3px; flex-shrink:0; align-items:center; white-space:nowrap;">
-                            <button class="menu_button plot-btn blk-up"         style="padding:2px 6px; font-size:0.75em;" title="上移"   ${isFirst ? 'disabled' : ''}><i class="fa-solid fa-arrow-up"></i></button>
-                            <button class="menu_button plot-btn blk-down"       style="padding:2px 6px; font-size:0.75em;" title="下移"   ${isLast  ? 'disabled' : ''}><i class="fa-solid fa-arrow-down"></i></button>
-                            <button class="menu_button plot-btn blk-fullscreen" style="padding:2px 6px; font-size:0.75em;" title="全屏编辑"><i class="fa-solid fa-expand"></i></button>
-                            <button class="menu_button plot-btn blk-expand"     style="padding:2px 6px; font-size:0.75em;" title="展开/折叠内容"><i class="fa-solid fa-chevron-down"></i></button>
-                            ${block.builtin
-                                ? `<button class="menu_button plot-btn blk-reset"  style="padding:2px 6px; font-size:0.75em;" title="重置为内置默认"><i class="fa-solid fa-arrow-rotate-left"></i></button>`
-                                : ''}
-                            <button class="menu_button plot-btn blk-delete" style="padding:2px 6px; font-size:0.75em; color:var(--SmartThemeQuoteColor);" title="删除此块"><i class="fa-solid fa-trash"></i></button>
-                        </div>
+                    
+                    <!-- Right: Action buttons -->
+                    <div style="display:flex; gap:3px; flex-shrink:0; align-items:center; white-space:nowrap;">
+                        <button class="menu_button plot-btn blk-copy"       style="padding:2px 6px; font-size:0.75em;" title="复制内容"><i class="fa-solid fa-copy"></i></button>
+                        <button class="menu_button plot-btn blk-fullscreen" style="padding:2px 6px; font-size:0.75em;" title="全屏编辑"><i class="fa-solid fa-expand"></i></button>
+                        <button class="menu_button plot-btn blk-expand"     style="padding:2px 6px; font-size:0.75em;" title="展开/折叠内容"><i class="fa-solid fa-chevron-down"></i></button>
+                        ${block.builtin
+                            ? `<button class="menu_button plot-btn blk-reset"  style="padding:2px 6px; font-size:0.75em;" title="重置为内置默认"><i class="fa-solid fa-arrow-rotate-left"></i></button>`
+                            : ''}
+                        <button class="menu_button plot-btn blk-delete" style="padding:2px 6px; font-size:0.75em; color:var(--SmartThemeQuoteColor);" title="删除此块"><i class="fa-solid fa-trash"></i></button>
                     </div>
                 </div>
                 <!-- Expandable content editor -->
@@ -463,22 +760,28 @@ export async function renderPromptsTab(containerEl) {
             // Bind events
             const toggle = card.querySelector('.blk-toggle');
             toggle.addEventListener('change', () => {
-                block.enabled = toggle.checked;
-                saveBlock(block, currentModule);
+                const updatedBlock = { ...block, enabled: toggle.checked };
+                saveBlock(updatedBlock);
+                saveSettings();
+                block = updatedBlock;
             });
 
             const roleSel = card.querySelector('.blk-role');
             roleSel.addEventListener('change', () => {
-                block.role = roleSel.value;
-                roleSel.style.background = ROLE_COLORS[block.role] || 'rgba(120,120,120,0.15)';
-                saveBlock(block, currentModule);
+                const updatedBlock = { ...block, role: roleSel.value };
+                roleSel.style.background = ROLE_COLORS[updatedBlock.role] || 'rgba(120,120,120,0.15)';
+                saveBlock(updatedBlock);
+                saveSettings();
+                block = updatedBlock;
             });
 
             // Name — editable for all blocks
             const nameInput = card.querySelector('.blk-name');
             nameInput.addEventListener('change', () => {
-                block.name = nameInput.value;
-                saveBlock(block, currentModule);
+                const updatedBlock = { ...block, name: nameInput.value };
+                saveBlock(updatedBlock);
+                saveSettings();
+                block = updatedBlock;
             });
 
             // Expand/collapse
@@ -492,33 +795,33 @@ export async function renderPromptsTab(containerEl) {
 
             // Content editing
             ta.addEventListener('input', () => {
-                block.content = ta.value;
+                const updatedBlock = { ...block, content: ta.value };
                 clearTimeout(ta._st);
-                ta._st = setTimeout(() => saveBlock(block, currentModule), 600);
+                ta._st = setTimeout(() => {
+                    saveBlock(updatedBlock);
+                    saveSettings();
+                }, 600);
+                block = updatedBlock;
             });
 
             ta.addEventListener('focus', () => {
                 lastFocusedTextarea = ta;
             });
 
+            // Copy content
+            const copyBtn = card.querySelector('.blk-copy');
+            if (copyBtn) {
+                copyBtn.addEventListener('click', () => {
+                    duplicateBlock(currentModule, block);
+                    renderBlockList();
+                    toastr.success(`已克隆并生成提示词块「${block.name} 副本」`);
+                });
+            }
+
             // Fullscreen edit
             card.querySelector('.blk-fullscreen').addEventListener('click', () => {
-                showEditModal(`全屏编辑：${block.name}`, block.content, val => {
-                    block.content = val;
-                    ta.value = val;
-                    saveBlock(block, currentModule);
-                });
+                showBlockEditModal(block, currentModule);
             });
-
-            // Move up/down
-            const upBtn = card.querySelector('.blk-up');
-            const dnBtn = card.querySelector('.blk-down');
-            if (upBtn && !isFirst) {
-                upBtn.addEventListener('click', () => { moveBlock(currentModule, block.identifier, 'up'); renderBlockList(); });
-            }
-            if (dnBtn && !isLast) {
-                dnBtn.addEventListener('click', () => { moveBlock(currentModule, block.identifier, 'down'); renderBlockList(); });
-            }
 
             // Reset (built-in only) — removes override, restores default content
             const resetBtn = card.querySelector('.blk-reset');

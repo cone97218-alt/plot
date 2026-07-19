@@ -91,10 +91,12 @@
                 <div class="plot-setting-group" style="flex: 1;">
                     <label class="plot-label">任务状态</label>
                     <select id="plot-drawer-goal-status" class="plot-select" style="width: 100%;">
-                        <option value="active">进行中</option>
-                        <option value="complete">已完成</option>
-                        <option value="failed">已失败</option>
-                        <option value="hidden">已隐藏</option>
+                        <option value="locked">🔒 已锁定</option>
+                        <option value="unlocked">🔓 已解锁（待激活）</option>
+                        <option value="active">⚡ 进行中</option>
+                        <option value="complete">✅ 已完成</option>
+                        <option value="failed">❌ 已失败</option>
+                        <option value="hidden">👁 已隐藏</option>
                     </select>
                 </div>
                 <div class="plot-setting-group" style="flex: 1;">
@@ -107,6 +109,16 @@
             <div class="plot-setting-group" id="plot-drawer-completion-detail-group" style="display: none; border: 1px solid var(--SmartThemeBorderColor); border-radius: 6px; padding: 10px; background: rgba(0,0,0,0.15); flex-direction: column; gap: 4px;">
                 <label class="plot-label" style="font-weight: bold; margin: 0;">状态变更记录</label>
                 <div id="plot-drawer-completion-detail-text" style="font-size: 0.85em; opacity: 0.85; white-space: pre-wrap; font-family: monospace;"></div>
+            </div>
+
+            <!-- Prerequisites Quest Chain Dependencies -->
+            <div class="plot-setting-group" id="plot-drawer-prerequisites-group" style="display: flex; flex-direction: column; gap: 6px; border: 1px solid var(--SmartThemeBorderColor); border-radius: 6px; padding: 10px; background: rgba(0,0,0,0.15); margin-bottom: 10px;">
+                <label class="plot-label" style="color: var(--SmartThemeEmColor); margin: 0; display: flex; align-items: center; gap: 4px;">
+                    <i class="fa-solid fa-link"></i> 前置依赖任务 (达成后本任务才会解锁)
+                </label>
+                <div id="plot-drawer-prerequisites-list" style="display: flex; flex-wrap: wrap; gap: 6px; max-height: 120px; overflow-y: auto; padding: 4px 0; box-sizing: border-box; width: 100%;">
+                    <!-- Prerequisites checkboxes list rendered here dynamically -->
+                </div>
             </div>
 
             <!-- Custom Extra Fields -->

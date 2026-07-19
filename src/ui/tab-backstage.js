@@ -23,7 +23,9 @@ function escapeHtml(text) {
     return String(text || '')
         .replace(/&/g, '&amp;')
         .replace(/</g, '&lt;')
-        .replace(/>/g, '&gt;');
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#39;');
 }
 
 // Local size-limited cache for parsed markdown content to avoid redundant parsing/sanitization

@@ -139,11 +139,15 @@ export async function renderLogsTab(containerEl) {
                 const taId = `apilog-msg-ta-${idx}`;
                 return `
                     <div style="border:1px solid var(--SmartThemeBorderColor); border-radius:4px; overflow:hidden;">
-                        <div class="plot-log-header" style="display:flex; justify-content:space-between; align-items:center; background:${roleColor}; padding:6px 10px; cursor:pointer; font-size:0.82em; border-bottom:1px solid rgba(255,255,255,0.03);">
-                            <span style="font-weight:bold; color:var(--SmartThemeBodyColor);">${roleLabel} Prompt</span>
-                            <div style="display:flex; gap:8px; align-items:center;">
-                                <i class="fa-solid fa-expand plot-ta-expand" data-ta="${taId}" data-title="${roleLabel} Message" style="cursor:pointer; color:var(--SmartThemeEmColor);" title="全屏查看"></i>
+                        <div style="display:flex; justify-content:space-between; align-items:center; background:${roleColor}; padding:6px 10px; font-size:0.82em; border-bottom:1px solid rgba(255,255,255,0.03);">
+                            <div class="plot-log-toggle" style="flex:1; cursor:pointer; display:flex; align-items:center; gap:6px;">
                                 <i class="fa-solid fa-chevron-down plot-log-icon" style="transition: transform 0.2s; transform: rotate(180deg);"></i>
+                                <span style="font-weight:bold; color:var(--SmartThemeBodyColor);">${roleLabel} Prompt</span>
+                            </div>
+                            <div style="display:flex; align-items:center; gap:6px;">
+                                <button class="plot-btn plot-ta-expand" data-ta="${taId}" data-title="${roleLabel} Message" style="padding: 2px 6px; font-size: 0.85em; height: 22px; display: flex; align-items: center; gap: 4px;" title="全屏查看">
+                                    <i class="fa-solid fa-expand"></i> 全屏
+                                </button>
                             </div>
                         </div>
                         <div class="plot-log-body" style="display:flex; padding:8px;">
@@ -183,7 +187,9 @@ export async function renderLogsTab(containerEl) {
 
             <div style="font-weight:bold; color:var(--SmartThemeEmColor); margin-top:5px; font-size:0.85em; display:flex; justify-content:space-between; align-items:center; margin-bottom:5px;">
                 <span>AI 响应内容 (Response)</span>
-                <i class="fa-solid fa-expand plot-ta-expand" data-ta="apilog-response-ta" data-title="AI Response" style="cursor:pointer;" title="全屏查看"></i>
+                <button class="plot-btn plot-ta-expand" data-ta="apilog-response-ta" data-title="AI Response" style="padding: 2px 6px; font-size: 0.85em; height: 22px; display: flex; align-items: center; gap: 4px;" title="全屏查看">
+                    <i class="fa-solid fa-expand"></i> 全屏
+                </button>
             </div>
             <div style="border:1px solid var(--SmartThemeBorderColor); border-radius:4px; overflow:hidden;">
                 <textarea id="apilog-response-ta" class="plot-input" rows="10" readonly style="width:100%; font-family:monospace; font-size:0.85em; background-color: var(--SmartThemeInputBgColor); color: var(--SmartThemeInputTextColor); border:none; padding:8px; box-sizing:border-box;">${lastApiLog.response || ''}</textarea>
@@ -191,11 +197,11 @@ export async function renderLogsTab(containerEl) {
         `;
 
         // Bind collapsible header events
-        logContainer.querySelectorAll('.plot-log-header').forEach(header => {
+        logContainer.querySelectorAll('.plot-log-toggle').forEach(toggle => {
+            const header = toggle.parentElement;
             const body = header.nextElementSibling;
-            const icon = header.querySelector('.plot-log-icon');
-            header.addEventListener('click', (e) => {
-                if (e.target.classList.contains('plot-ta-expand')) return;
+            const icon = toggle.querySelector('.plot-log-icon');
+            toggle.addEventListener('click', () => {
                 const isOpen = body.style.display !== 'none';
                 body.style.display = isOpen ? 'none' : 'flex';
                 icon.style.transform = isOpen ? 'rotate(0deg)' : 'rotate(180deg)';
@@ -243,11 +249,15 @@ export async function renderLogsTab(containerEl) {
                 const taId = `plot-sim-msg-ta-${idx}`;
                 return `
                     <div style="border:1px solid var(--SmartThemeBorderColor); border-radius:4px; overflow:hidden;">
-                        <div class="plot-sim-header" style="display:flex; justify-content:space-between; align-items:center; background:${roleColor}; padding:6px 10px; cursor:pointer; font-size:0.82em; border-bottom:1px solid rgba(255,255,255,0.03);">
-                            <span style="font-weight:bold; color:var(--SmartThemeBodyColor);">[${roleName}] ${m.name || '提示词块'}</span>
-                            <div style="display:flex; gap:8px; align-items:center;">
-                                <i class="fa-solid fa-expand plot-ta-expand" data-ta="${taId}" data-title="${moduleLabel} - [${roleName}] ${m.name || '提示词块'}" style="cursor:pointer; color:var(--SmartThemeEmColor);" title="全屏查看"></i>
+                        <div style="display:flex; justify-content:space-between; align-items:center; background:${roleColor}; padding:6px 10px; font-size:0.82em; border-bottom:1px solid rgba(255,255,255,0.03);">
+                            <div class="plot-sim-toggle" style="flex:1; cursor:pointer; display:flex; align-items:center; gap:6px;">
                                 <i class="fa-solid fa-chevron-down plot-sim-icon" style="transition: transform 0.2s; transform: rotate(180deg);"></i>
+                                <span style="font-weight:bold; color:var(--SmartThemeBodyColor);">[${roleName}] ${m.name || '提示词块'}</span>
+                            </div>
+                            <div style="display:flex; align-items:center; gap:6px;">
+                                <button class="plot-btn plot-ta-expand" data-ta="${taId}" data-title="${moduleLabel} - [${roleName}] ${m.name || '提示词块'}" style="padding: 2px 6px; font-size: 0.85em; height: 22px; display: flex; align-items: center; gap: 4px;" title="全屏查看">
+                                    <i class="fa-solid fa-expand"></i> 全屏
+                                </button>
                             </div>
                         </div>
                         <div class="plot-sim-body" style="display:flex; padding:8px;">
@@ -270,11 +280,11 @@ export async function renderLogsTab(containerEl) {
             `;
 
             // Bind collapsible events
-            logContainer.querySelectorAll('.plot-sim-header').forEach(header => {
+            logContainer.querySelectorAll('.plot-sim-toggle').forEach(toggle => {
+                const header = toggle.parentElement;
                 const body = header.nextElementSibling;
-                const icon = header.querySelector('.plot-sim-icon');
-                header.addEventListener('click', (e) => {
-                    if (e.target.classList.contains('plot-ta-expand')) return;
+                const icon = toggle.querySelector('.plot-sim-icon');
+                toggle.addEventListener('click', () => {
                     const isOpen = body.style.display !== 'none';
                     body.style.display = isOpen ? 'none' : 'flex';
                     icon.style.transform = isOpen ? 'rotate(0deg)' : 'rotate(180deg)';

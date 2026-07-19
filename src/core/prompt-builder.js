@@ -18,6 +18,7 @@
 import { getContext, extension_settings } from '../../../../../extensions.js';
 import { get } from './store.js';
 import { serializeVariables, serializeGoals, serializeStorylines } from './serializers.js';
+import { buildInjectionText } from './injection.js';
 
 const MODULE_NAME = 'plot';
 
@@ -80,14 +81,18 @@ export function resolvePlaceholders(text, context = {}, extra = {}) {
         '{{chat_history}}':        context.chat_history || '',
         '{{summary}}':             context.summary || '',
         '{{guidance}}':            context.guidance || '',
-        '{{variables_list}}':      serializeVariables(),
-        '{{goals_list}}':          serializeGoals('active'),
-        '{{goals_list_active}}':   serializeGoals('active'),
-        '{{goals_list_complete}}': serializeGoals('complete'),
-        '{{goals_list_failed}}':   serializeGoals('failed'),
-        '{{goals_list_hidden}}':   serializeGoals('hidden'),
-        '{{goals_list_all}}':      serializeGoals('all'),
-        '{{storyline_status}}':    serializeStorylines(),
+        
+        // SillyTavern global macros mapped to Backstage Workspace
+        '{{plot_state}}':          buildInjectionText ? buildInjectionText().trim() : '',
+        '{{plot_variables}}':      serializeVariables(),
+        '{{plot_goals}}':          serializeGoals('active'),
+        '{{plot_goals_active}}':   serializeGoals('active'),
+        '{{plot_goals_complete}}': serializeGoals('complete'),
+        '{{plot_goals_failed}}':   serializeGoals('failed'),
+        '{{plot_goals_hidden}}':   serializeGoals('hidden'),
+        '{{plot_goals_all}}':      serializeGoals('all'),
+        '{{plot_storyline}}':      serializeStorylines(),
+        
         '{{backstage_user_input}}': context.backstage_user_input || '',
         '{{backstage_chat_history}}': context.backstage_chat_history || '',
         '{{bts_user_input}}':       context.bts_user_input || '',
