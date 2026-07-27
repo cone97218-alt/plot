@@ -345,7 +345,6 @@ export async function buildContext(overrides = {}) {
     return {
         char_desc: charDesc,
         user_desc: userDesc,
-        world_info: [wiContent.before, wiContent.after, wiContent.depth].filter(Boolean).join('\n\n'), // fallback for legacy {{world_info}}
         world_info_before: wiContent.before,
         world_info_after: wiContent.after,
         world_info_depth: wiContent.depth,

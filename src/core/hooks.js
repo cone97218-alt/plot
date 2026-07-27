@@ -1,16 +1,12 @@
 /**
  * hooks.js - ST event hook registrations
- * Registers listeners for chat/character lifecycle and AI generation events.
+ * Registers listeners for chat/character lifecycle events to keep Backstage state synced.
  */
 
-import { getContext } from '../../../../../extensions.js';
-import { loadPlotData, savePlotData } from './storage.js';
-import { parseMessage } from './output-parser.js';
-import { injectIntoPrompt } from './injection.js';
-import { evaluateKeywordGoals } from './goal-engine.js';
+import { loadPlotData } from './storage.js';
+import { registerStoryPlanInjector } from './injector.js';
+import { reloadStoryPlanPanes } from '../ui/tab-storyplan.js';
 
-// Debounce guard: prevents concurrent loadPlotData calls when CHAT_CHANGED
-// and CHARACTER_SELECTED fire in quick succession (e.g. on character switch).
 let _isLoadingPlotData = false;
 
 async function safeLoadPlotData(source) {
@@ -21,14 +17,8 @@ async function safeLoadPlotData(source) {
     _isLoadingPlotData = true;
     try {
         await loadPlotData();
+        await reloadStoryPlanPanes();
         console.log(`[Plot Hooks] ${source}: Loaded plot data.`);
-        
-        // Proactively refresh extension prompt injection state!
-        try {
-            injectIntoPrompt();
-        } catch (e) {
-            console.warn('[Plot Hooks] Failed to update prompt injection after load:', e);
-        }
     } catch (e) {
         console.error(`[Plot Hooks] Failed to load plot data on "${source}":`, e);
     } finally {
@@ -37,7 +27,7 @@ async function safeLoadPlotData(source) {
 }
 
 export function registerHooks(eventSource, event_types) {
-    // 1. Chat/Character changed: reload plot data layers
+    // Chat/Character changed: reload plot data & backstage history & StoryPlan panes
     eventSource.on(event_types.CHAT_CHANGED, () => {
         safeLoadPlotData('CHAT_CHANGED');
     });
@@ -46,27 +36,6 @@ export function registerHooks(eventSource, event_types) {
         safeLoadPlotData('CHARACTER_SELECTED');
     });
 
-    // 2. Main story text generation event: trigger prompt injection
-    eventSource.on(event_types.GENERATE_BEFORE_COMBINE_PROMPTS, () => {
-        try {
-            injectIntoPrompt();
-        } catch (e) {
-            console.error('[Plot Hooks] Prompt injection failed:', e);
-        }
-    });
-
-    // 3. Message received event: trigger parser scanning for AI replies
-    eventSource.on(event_types.MESSAGE_RECEIVED, async (messageId) => {
-        try {
-            // B1 Fix: use imported getContext() instead of SillyTavern.getContext()
-            const ctx = getContext();
-            const message = ctx.chat[messageId];
-            if (message && message.is_user === false) {
-                parseMessage(message.mes);
-                evaluateKeywordGoals(message.mes);
-            }
-        } catch (e) {
-            console.error('[Plot Hooks] Output parsing failed for message:', messageId, e);
-        }
-    });
+    // StoryPlan auto-injector for SillyTavern main chat generation
+    registerStoryPlanInjector(eventSource, event_types);
 }

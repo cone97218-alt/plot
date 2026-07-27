@@ -12,13 +12,11 @@
  */
 
 import { getContext, renderExtensionTemplateAsync } from '../../../../../extensions.js';
-import { selected_world_info, loadWorldInfo } from '../../../../../world-info.js';
 import { showPanel, refreshTabVisibility } from './panel.js';
 import { listConnections, saveConnection, deleteConnection, getConnection, fetchModels, testConnection, testConnectionById } from '../core/api-client.js';
 import { exportPlotData, importPlotData, resetAllPlotData } from '../core/storage.js';
-import { renderTutorial } from './tutorial.js';
 import { renderBookChecklist, subscribeWIRefresh } from '../utils/dom.js';
-import { injectIntoPrompt } from '../core/injection.js';
+import { renderTutorial } from './tutorial.js';
 
 const MODULE_NAME = 'plot';
 let activeSubTabId = localStorage.getItem('plot_active_settings_sub_tab_id') || 'display';
@@ -39,12 +37,16 @@ function saveSettings() {
 
 // ── Sub Tab Renderer List ───────────────────────────────────────────────────
 
+function renderTutorialSubTab(container) {
+    renderTutorial(container);
+}
+
 const SUB_TABS = [
-    { id: 'display', icon: 'fa-cubes',            title: '面板与模块', render: renderDisplaySubTab },
-    { id: 'api',     icon: 'fa-server',           title: 'API连接',   render: renderApiSubTab },
-    { id: 'reading', icon: 'fa-filter',           title: '内容读取',   render: renderReadingSubTab },
-    { id: 'data',    icon: 'fa-database',         title: '数据管理',   render: renderDataSubTab },
-    { id: 'help',    icon: 'fa-circle-info',      title: '教程说明',   render: renderHelpSubTab }
+    { id: 'display',  icon: 'fa-cubes',         title: '面板与模块', render: renderDisplaySubTab },
+    { id: 'api',      icon: 'fa-server',        title: 'API连接',   render: renderApiSubTab },
+    { id: 'reading',  icon: 'fa-filter',        title: '内容读取',   render: renderReadingSubTab },
+    { id: 'data',     icon: 'fa-database',      title: '数据管理',   render: renderDataSubTab },
+    { id: 'tutorial', icon: 'fa-book-bookmark', title: '教程说明',   render: renderTutorialSubTab },
 ];
 
 // ── Sub Tab 1: Panel Display & Modules ───────────────────────────────────────
@@ -54,19 +56,9 @@ async function renderDisplaySubTab(container) {
     if (!settings.panelPosition) settings.panelPosition = 'normal';
     if (!settings.panelSize)     settings.panelSize     = '80%';
     if (!settings.modules)       settings.modules       = {};
-    if (settings.injectionPosition === undefined) settings.injectionPosition = 1;
-    if (settings.injectionPosition !== -1 && settings.injectionPosition !== 1) {
-        settings.injectionPosition = 1;
-    }
-    if (settings.injectionDepth === undefined) settings.injectionDepth = 0;
-    if (settings.injectionRole === undefined) settings.injectionRole = 0;
 
-    const DEFAULT_GLOBAL_INJECT_TEMPLATE = '[剧情状态]\n{{goals}}\n[/剧情状态]';
 
     const modules = [
-        { id: 'variables', label: '变量/状态系统' },
-        { id: 'goals',     label: '目标系统'       },
-        { id: 'storyline', label: '故事线管理'      },
         { id: 'backstage', label: '幕后'          },
         { id: 'logs',      label: '日志与测试'      },
     ];
@@ -103,7 +95,6 @@ async function renderDisplaySubTab(container) {
 
     setupAccordion('plot-header-display', 'plot-body-display');
     setupAccordion('plot-header-modules', 'plot-body-modules');
-    setupAccordion('plot-header-global-inject', 'plot-body-global-inject');
 
     // Bind Position Select
     const posSelect = container.querySelector('#plot-panel-position');
@@ -128,7 +119,6 @@ async function renderDisplaySubTab(container) {
         e.stopPropagation();
         showPanel({
             position: settings.panelPosition,
-
             size: settings.panelSize
         });
     });
@@ -141,65 +131,6 @@ async function renderDisplaySubTab(container) {
             refreshTabVisibility();
         });
     });
-
-    // Bind Global Injection Template textarea
-    const globalTplArea = container.querySelector('#plot-global-injection-template');
-    if (globalTplArea) {
-        globalTplArea.value = settings.globalInjectionTemplate || DEFAULT_GLOBAL_INJECT_TEMPLATE;
-        globalTplArea.addEventListener('change', () => {
-            settings.globalInjectionTemplate = globalTplArea.value;
-            saveSettings();
-            injectIntoPrompt();
-        });
-
-        // Bind Position, Depth, Role Settings
-        const enabledToggle = container.querySelector('#plot-global-inject-enabled-toggle');
-        const depthContainer = container.querySelector('#plot-global-inject-depth-container');
-        const roleContainer = container.querySelector('#plot-global-inject-role-container');
-        const depthInput = container.querySelector('#plot-global-inject-depth');
-        const roleSelect = container.querySelector('#plot-global-inject-role');
-
-        if (enabledToggle && depthContainer && roleContainer && depthInput && roleSelect) {
-            enabledToggle.checked = settings.injectionPosition === 1;
-            depthInput.value = settings.injectionDepth;
-            roleSelect.value = settings.injectionRole;
-
-            const updateVisibility = () => {
-                const isEnabled = enabledToggle.checked;
-                depthContainer.style.display = isEnabled ? 'flex' : 'none';
-                roleContainer.style.display = isEnabled ? 'flex' : 'none';
-            };
-            
-            updateVisibility();
-
-            enabledToggle.addEventListener('change', () => {
-                settings.injectionPosition = enabledToggle.checked ? 1 : -1;
-                updateVisibility();
-                saveSettings();
-                injectIntoPrompt();
-            });
-
-            depthInput.addEventListener('change', () => {
-                settings.injectionDepth = Math.max(0, Number(depthInput.value) || 0);
-                saveSettings();
-                injectIntoPrompt();
-            });
-
-            roleSelect.addEventListener('change', () => {
-                settings.injectionRole = Number(roleSelect.value);
-                saveSettings();
-                injectIntoPrompt();
-            });
-        }
-
-        // Reset button
-        container.querySelector('#plot-global-inject-reset')?.addEventListener('click', () => {
-            settings.globalInjectionTemplate = DEFAULT_GLOBAL_INJECT_TEMPLATE;
-            globalTplArea.value = DEFAULT_GLOBAL_INJECT_TEMPLATE;
-            saveSettings();
-            injectIntoPrompt();
-        });
-    }
 }
 
 // ── Sub Tab 2: API Connection Config (stub) ─────────────────────────────────
@@ -568,7 +499,7 @@ async function renderReadingSubTab(container) {
         }
 
         listContainer.innerHTML = rules.map((rule, idx) => `
-            <div style="border: 1px solid var(--SmartThemeBorderColor); border-radius: 6px; padding: 10px; display: flex; flex-direction: column; gap: 8px; background: var(--SmartThemeChatTintColor); box-shadow: 0 1px 3px rgba(0,0,0,0.05);">
+            <div style="border: 1px solid var(--SmartThemeBorderColor); border-radius: 6px; padding: 10px; display: flex; flex-direction: column; gap: 8px; background: rgba(var(--SmartThemeBorderColor-rgb), 0.08); box-shadow: 0 1px 3px rgba(0,0,0,0.05);">
                 <!-- Top Row: Name and Actions -->
                 <div style="display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: 8px; border-bottom: 1px dashed var(--SmartThemeBorderColor); padding-bottom: 6px;">
                     <input type="text" class="plot-input plot-regex-name" data-idx="${idx}" value="${rule.name || ''}" placeholder="规则名称" style="padding: 2px 6px; font-size: 0.85em; flex: 1; min-width: 100px; max-width: 150px;">
@@ -814,12 +745,6 @@ async function renderDataSubTab(container) {
             alert('重置失败: ' + err.message);
         }
     });
-}
-
-// ── Sub Tab 5: Help & Tutorial ───────────────────────────────────────────────
-
-function renderHelpSubTab(container) {
-    renderTutorial(container);
 }
 
 // ── Main Tab View Render ─────────────────────────────────────────────────────

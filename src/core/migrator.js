@@ -23,9 +23,6 @@ const migrations = {
         return data;
     },
     '0.4.0': (data) => {
-        if (!data.variables) data.variables = {};
-        if (!data.goals) data.goals = {};
-        if (!data.storylines) data.storylines = {};
         data.version = '0.4.0';
         return data;
     },

@@ -1,6 +1,6 @@
 /**
  * indexeddb.js - High-capacity browser-native storage wrapper for Plot data.
- * Stores backstage histories, variable values, goals, and storylines under a unified store.
+ * Stores backstage histories, threads, active mode selections, and settings under a unified store.
  */
 
 const DB_NAME = 'PlotExtensionDB';

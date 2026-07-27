@@ -1,15 +1,68 @@
 @import url('./components.css');
 
+
 /* All text must be horizontal, vertical is forbidden */
 .plot-extension-root, .plot-extension-root * {
     writing-mode: horizontal-tb !important;
     text-orientation: mixed !important;
 }
 
-/* Theme Adaptive Colors (No hardcoded colors) */
-.plot-extension-root {
+/* Theme Adaptive Colors (No hardcoded colors, No background, No borders) */
+.plot-extension-root,
+.plot-popup-content {
     color: var(--SmartThemeBodyColor);
     font-family: inherit;
+}
+
+.plot-extension-root select,
+.plot-extension-root input,
+.plot-extension-root textarea,
+.plot-extension-root button,
+.plot-popup-content select,
+.plot-popup-content input,
+.plot-popup-content textarea,
+.plot-popup-content button,
+.plot-select,
+.plot-input,
+.plot-bts-textarea,
+.plot-btn,
+button.plot-btn,
+button.menu_button,
+.plot-accordion,
+.plot-accordion-section,
+.plot-accordion-header,
+.plot-accordion-body,
+.plot-tab-bar,
+.plot-sub-tab-bar,
+.plot-tabs-nav,
+.plot-tabs-content,
+.plot-popup-header,
+.plot-bts-drawer-header,
+.plot-bts-drawer-footer,
+.plot-bts-input-area,
+.plot-setting-group,
+.plot-settings-group,
+#pt-preset-bar,
+#pt-module-config-bar,
+#pt-order-btn,
+#pt-cheat-hdr,
+#pt-cheat-body,
+#pt-block-list,
+.sp-sub-tab-bar,
+.sp-pane-wrapper,
+.sp-events-area,
+.sp-threads-list,
+.sp-outline-area {
+    background-color: transparent !important;
+    background: transparent !important;
+    border: none !important;
+    outline: none !important;
+    box-shadow: none !important;
+}
+
+.plot-select option {
+    background-color: var(--SmartThemeBlurTintColor, #1e1e2e) !important;
+    color: var(--SmartThemeBodyColor) !important;
 }
 
 /* Prevent vertical text wrap/shrink for tabs, buttons, and navigation elements */
@@ -30,7 +83,7 @@
     width: 100vw;
     height: 100vh;
     z-index: 9999;
-    background-color: rgba(0, 0, 0, 0.5);
+    background-color: rgba(var(--SmartThemeBlurTintColor-rgb, 0, 0, 0), 0.5);
     display: none;
     opacity: 0;
     transition: opacity 0.2s ease-in-out;
@@ -125,7 +178,7 @@
     justify-content: space-between;
     padding: 10px 15px;
     border-bottom: 1px solid var(--SmartThemeBorderColor);
-    background-color: var(--SmartThemeChatTintColor);
+    background-color: rgba(var(--SmartThemeBorderColor-rgb, 128, 128, 128), 0.08);
 }
 
 .plot-popup-title {
@@ -179,7 +232,7 @@
     gap: 5px;
     padding: 10px 15px 5px 15px;
     border-bottom: 1px solid var(--SmartThemeBorderColor);
-    background-color: rgba(var(--SmartThemeChatTintColor-rgb), 0.3);
+    background-color: rgba(var(--SmartThemeBorderColor-rgb, 128, 128, 128), 0.08);
     -webkit-overflow-scrolling: touch;
 }
 
@@ -214,11 +267,11 @@
 
 .plot-tab:hover {
     color: var(--SmartThemeEmColor);
-    background-color: rgba(var(--SmartThemeChatTintColor-rgb), 0.5);
+    background-color: rgba(var(--SmartThemeBorderColor-rgb, 128, 128, 128), 0.12);
 }
 
 .plot-tab.active {
-    background-color: var(--SmartThemeChatTintColor);
+    background-color: rgba(var(--SmartThemeBorderColor-rgb, 128, 128, 128), 0.15);
     border: 1px solid var(--SmartThemeBorderColor);
     border-bottom-color: transparent;
     color: var(--SmartThemeEmColor);
@@ -233,7 +286,7 @@
     flex: 1;
     overflow-y: auto;
     overflow-x: hidden;
-    background-color: var(--SmartThemeChatTintColor);
+    background-color: transparent;
     padding: 20px;
     position: relative;
 }
@@ -294,9 +347,9 @@
 .plot-select, .plot-input {
     padding: 8px 12px;
     border-radius: 4px;
-    background-color: var(--SmartThemeChatTintColor);
-    color: var(--SmartThemeBodyColor);
-    border: 1px solid var(--SmartThemeBorderColor);
+    background-color: var(--SmartThemeInputBgColor, rgba(var(--SmartThemeBlurTintColor-rgb, 20, 20, 30), 0.8));
+    color: var(--SmartThemeInputTextColor, var(--SmartThemeBodyColor));
+    border: 1px solid var(--SmartThemeInputBorderColor, var(--SmartThemeBorderColor));
     box-sizing: border-box;
     font-family: inherit;
     font-size: 0.95em;

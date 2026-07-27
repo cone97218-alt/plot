@@ -1,0 +1,117 @@
+<div class="sp-root" id="sp-root">
+
+    <!-- Sub-Tab Navigation -->
+    <div class="sp-sub-tab-bar" id="sp-sub-tab-bar">
+        <button class="sp-sub-tab active" data-sptab="events" title="日程">
+            <i class="fa-solid fa-calendar-days"></i>
+        </button>
+        <button class="sp-sub-tab" data-sptab="threads" title="脉络">
+            <i class="fa-solid fa-code-branch"></i>
+        </button>
+        <button class="sp-sub-tab" data-sptab="outline" title="世界">
+            <i class="fa-solid fa-earth-americas"></i>
+        </button>
+
+        <!-- Spacer -->
+        <div style="flex:1;"></div>
+
+        <!-- Edit Lock Toggle Button -->
+        <button class="sp-icon-btn" id="sp-lock-toggle-btn" title="点击解锁编辑">
+            <i class="fa-solid fa-lock"></i>
+        </button>
+
+        <!-- Per-tab config toggle -->
+        <button class="sp-icon-btn sp-cfg-btn" id="sp-cfg-toggle-btn" title="配置连接与提示词">
+            <i class="fa-solid fa-sliders"></i>
+        </button>
+    </div>
+
+    <!-- Sub-Tab Panes -->
+    <div class="sp-pane-wrapper" id="sp-pane-wrapper">
+
+        <!-- ── 日程 Pane ──────────────────────────────────────── -->
+        <div class="sp-pane active" id="sp-pane-events">
+            <!-- Toolbar -->
+            <div class="sp-toolbar">
+                <!-- Perspective toggle -->
+                <div class="sp-perspective-toggle" id="sp-perspective-toggle">
+                    <button class="sp-persp-btn active" data-persp="u" title="u 视角">
+                        <i class="fa-solid fa-user"></i>
+                    </button>
+                    <button class="sp-persp-btn" data-persp="c" title="c 视角">
+                        <i class="fa-solid fa-masks-theater"></i>
+                    </button>
+                </div>
+                <div style="flex:1;"></div>
+                <button class="sp-icon-btn sp-generate-btn-icon" id="sp-events-generate-btn" title="AI 推演">
+                    <i class="fa-solid fa-wand-magic-sparkles"></i>
+                </button>
+                <button class="sp-icon-btn" id="sp-events-add-btn" title="手动新建日程事件卡">
+                    <i class="fa-solid fa-plus"></i>
+                </button>
+                <button class="sp-icon-btn" id="sp-events-clear-btn" title="清空当前视角的事件卡">
+                    <i class="fa-solid fa-trash"></i>
+                </button>
+            </div>
+
+            <!-- Event Cards Area -->
+            <div class="sp-events-area" id="sp-events-area">
+                <div class="sp-empty-hint" id="sp-events-empty">
+                    <i class="fa-solid fa-calendar-xmark" style="font-size:2em;opacity:0.3;"></i>
+                    <p>点击"AI 推演"，从当前剧情向后推演事件</p>
+                </div>
+            </div>
+        </div>
+
+        <!-- ── 脉络 Pane ──────────────────────────────────────── -->
+        <div class="sp-pane" id="sp-pane-threads">
+            <!-- Toolbar -->
+            <div class="sp-toolbar">
+                <span class="sp-toolbar-title" title="故事脉络"><i class="fa-solid fa-code-branch"></i></span>
+                <div style="flex:1;"></div>
+                <button class="sp-icon-btn sp-generate-btn-icon" id="sp-threads-generate-btn" title="AI 识别脉络">
+                    <i class="fa-solid fa-wand-magic-sparkles"></i>
+                </button>
+                <button class="sp-icon-btn" id="sp-threads-add-btn" title="手动新建一条脉络">
+                    <i class="fa-solid fa-plus"></i>
+                </button>
+                <button class="sp-icon-btn" id="sp-threads-clear-btn" title="清空所有脉络">
+                    <i class="fa-solid fa-trash"></i>
+                </button>
+            </div>
+
+            <!-- Threads List -->
+            <div class="sp-threads-list" id="sp-threads-list">
+                <div class="sp-empty-hint" id="sp-threads-empty">
+                    <i class="fa-solid fa-circle-nodes" style="font-size:2em;opacity:0.3;"></i>
+                    <p>点击"AI 识别脉络"，或手动添加一条故事线</p>
+                </div>
+            </div>
+        </div>
+
+        <!-- ── 世界 Pane ──────────────────────────────────────── -->
+        <div class="sp-pane" id="sp-pane-outline">
+            <!-- Toolbar -->
+            <div class="sp-toolbar">
+                <span class="sp-toolbar-title" title="全景蓝图"><i class="fa-solid fa-earth-americas"></i></span>
+                <div style="flex:1;"></div>
+                <button class="sp-icon-btn sp-generate-btn-icon" id="sp-outline-generate-btn" title="AI 生成全景蓝图">
+                    <i class="fa-solid fa-wand-magic-sparkles"></i>
+                </button>
+                <button class="sp-icon-btn" id="sp-outline-clear-btn" title="清空大纲">
+                    <i class="fa-solid fa-trash"></i>
+                </button>
+            </div>
+
+            <!-- Outline Area -->
+            <div class="sp-outline-area" id="sp-outline-area">
+                <div class="sp-empty-hint" id="sp-outline-empty">
+                    <i class="fa-solid fa-earth-americas" style="font-size:2em;opacity:0.3;"></i>
+                    <p>点击"AI 生成世界"，获得约 8 个关键节点的全景分析</p>
+                </div>
+            </div>
+        </div>
+
+    </div>
+</div>
+

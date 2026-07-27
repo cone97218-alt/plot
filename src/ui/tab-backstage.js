@@ -11,7 +11,7 @@ import { loadPlotData, savePlotData, getBtsDBKey } from '../core/storage.js';
 import { buildContext } from '../core/context-reader.js';
 import { resolvePlaceholders, assemblePrompt, getBlocks } from '../core/prompt-builder.js';
 import { callAI, listConnections, callAIStream } from '../core/api-client.js';
-import { renderBookChecklist, subscribeWIRefresh } from '../utils/dom.js';
+import { renderBookChecklist, subscribeWIRefresh, escapeHtml } from '../utils/dom.js';
 
 let rootEl = null;
 let currentAbortController = null;
@@ -19,16 +19,6 @@ let currentBtsReloadWI = null;
 let _btsWiUnsubscribe = null; // tracks the active WI event subscription (replaces isBtsEventBound)
 let _btsStoreUnsubscribe = null;
 let _btsLoadingStoreUnsubscribe = null;
-
-// Helper to escape HTML tags for safe markdown preprocessing
-function escapeHtml(text) {
-    return String(text || '')
-        .replace(/&/g, '&amp;')
-        .replace(/</g, '&lt;')
-        .replace(/>/g, '&gt;')
-        .replace(/"/g, '&quot;')
-        .replace(/'/g, '&#39;');
-}
 
 // Local size-limited cache for parsed markdown content to avoid redundant parsing/sanitization
 const markdownCache = new Map();
@@ -1086,7 +1076,7 @@ function showInputModal(title, placeholder, onConfirm) {
         overlay.id = 'plot-bts-input-modal-overlay';
         overlay.style.cssText = [
             'position:fixed; top:0; left:0; width:100vw; height:100vh;',
-            'background-color:rgba(0,0,0,0.55);',
+            'background-color:rgba(var(--SmartThemeBlurTintColor-rgb, 0, 0, 0),0.55);',
             'z-index:999999; display:flex; align-items:center; justify-content:center; padding:15px; box-sizing:border-box;'
         ].join('');
         overlay.innerHTML = `
@@ -1172,7 +1162,7 @@ function showRegexEditorModal(initialName, initialFind, initialReplace, initialA
         box-sizing: border-box;
     `;
     overlay.innerHTML = `
-        <div style="width: 320px; background: var(--SmartThemeChatTintColor); border: 1px solid var(--SmartThemeBorderColor); border-radius: 8px; padding: 15px; box-shadow: 0 4px 15px rgba(0,0,0,0.3); display: flex; flex-direction: column; gap: 10px;">
+        <div style="width: 320px; background: rgba(var(--SmartThemeBlurTintColor-rgb, 20, 20, 30), 0.95); border: 1px solid var(--SmartThemeBorderColor); border-radius: 8px; padding: 15px; box-shadow: 0 4px 15px rgba(0,0,0,0.3); display: flex; flex-direction: column; gap: 10px;">
             <div style="font-weight: bold; color: var(--SmartThemeEmColor); border-bottom: 1px solid var(--SmartThemeBorderColor); padding-bottom: 6px; margin-bottom: 4px; font-size:0.95em;">编辑专属正则裁剪规则</div>
             <div class="plot-setting-group">
                 <label class="plot-label" style="font-size: 0.8em;">规则名称</label>
@@ -1979,7 +1969,7 @@ function showBackstageEditModal(title, initialText, onSave) {
         left: 0;
         width: 100vw;
         height: 100vh;
-        background-color: rgba(0, 0, 0, 0.6);
+        background-color: rgba(var(--SmartThemeBlurTintColor-rgb, 0, 0, 0), 0.6);
         color: var(--SmartThemeBodyColor);
         z-index: 999999;
         display: flex;

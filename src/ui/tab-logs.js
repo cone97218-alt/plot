@@ -8,7 +8,6 @@ import { renderExtensionTemplateAsync, extension_settings } from '../../../../..
 import { assemblePrompt } from '../core/prompt-builder.js';
 import { getRealPromptMessages, lastApiLog } from '../core/api-client.js';
 import { get } from '../core/store.js';
-import { getActiveModeConfig } from './module-config-drawer.js';
 
 const PBL_ROLE_COLORS = {
     system:    'rgba(80,120,220,0.25)',
@@ -18,10 +17,6 @@ const PBL_ROLE_COLORS = {
 const PBL_ROLE_LABELS = { system: 'System', user: 'User', assistant: 'AI' };
 
 const MODULE_LABELS = {
-    variables: '变量分析',
-    goals:     '目标判定',
-    goals_ai_gen: '目标生成',
-    storyline: '故事线规划',
     backstage: '幕后模块'
 };
 
@@ -173,7 +168,7 @@ export async function renderLogsTab(containerEl) {
 
         logContainer.innerHTML = `
             ${errorBannerHtml}
-            <div style="border:1px solid var(--SmartThemeBorderColor); border-radius:4px; padding:10px; background:rgba(0,0,0,0.1); display:flex; flex-direction:column; gap:4px; font-size:0.82em; margin-bottom:5px;">
+            <div style="border:1px solid var(--SmartThemeBorderColor); border-radius:4px; padding:10px; background:rgba(var(--SmartThemeBorderColor-rgb),0.12); display:flex; flex-direction:column; gap:4px; font-size:0.82em; margin-bottom:5px;">
                 <div><strong>调用时间:</strong> ${dateStr}</div>
                 <div><strong>接口连接:</strong> ${lastApiLog.connectionName || 'ST 默认'}</div>
                 <div><strong>模型名称:</strong> ${lastApiLog.model || '未知'}</div>
@@ -225,14 +220,6 @@ export async function renderLogsTab(containerEl) {
                 if (mode) {
                     connId = mode.useCustomConnection ? mode.connectionId : 'global';
                 }
-            } else if (moduleId === 'goals') {
-                const cfg = await getActiveModeConfig('goals');
-                connId = cfg.useCustomConnection ? cfg.connectionId : 'global';
-                presetIdOverride = cfg.presetId || 'default';
-            } else if (moduleId === 'goals_ai_gen') {
-                const cfg = await getActiveModeConfig('goals');
-                connId = cfg.useCustomConnection ? cfg.connectionId : 'global';
-                presetIdOverride = cfg.generationPresetId || 'default';
             } else {
                 const s = extension_settings.plot || {};
                 connId = s.defaultConnectionId || 'default';
@@ -268,7 +255,7 @@ export async function renderLogsTab(containerEl) {
             }).join('');
 
             logContainer.innerHTML = `
-                <div style="border:1px solid var(--SmartThemeBorderColor); border-radius:4px; padding:10px; background:rgba(0,0,0,0.1); display:flex; flex-direction:column; gap:4px; font-size:0.82em; margin-bottom:5px;">
+                <div style="border:1px solid var(--SmartThemeBorderColor); border-radius:4px; padding:10px; background:rgba(var(--SmartThemeBorderColor-rgb),0.12); display:flex; flex-direction:column; gap:4px; font-size:0.82em; margin-bottom:5px;">
                     <div><strong>日志类型:</strong> 提示词模拟测试 (Simulated Prompt Tester)</div>
                     <div><strong>目标模块:</strong> ${moduleLabel}</div>
                     <div><strong>说明:</strong> 以下为经过 API 管道包装后，实际会发送给大模型接口的真实提示词请求队列。</div>

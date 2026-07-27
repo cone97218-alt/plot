@@ -5,9 +5,8 @@
  * Each block has: role (system/user/assistant), name, content, enabled, order.
  * Built-in blocks can be disabled or reset; custom blocks can be fully managed.
  *
- * Module tabs: 总模板 | 变量模块 | 目标模块 | 故事线模块 | 幕后
- *   - 总模板: shows only the two global blocks (global_system + global_user)
- *   - Module tabs: show global blocks + module-specific blocks (full assembly chain)
+ * Module tabs: 幕后
+ *   - Backstage: show blocks for backstage module
  *
  * Preset bar: per-module preset switcher (new / rename / delete / import / export)
  */
@@ -15,66 +14,49 @@
 import { getContext, extension_settings, renderExtensionTemplateAsync } from '../../../../../extensions.js';
 import { getBlocks, saveBlock, deleteBlock, resetBlock, assemblePrompt } from '../core/prompt-builder.js';
 import { buildContext } from '../core/context-reader.js';
+import { escapeHtml } from '../utils/dom.js';
 
 const MODULE_NAME = 'plot';
 let lastFocusedTextarea = null;
 let activeRenderBlockList = null;
 
-// Helper to escape HTML safely
-function escapeHtml(text) {
-    return String(text || '')
-        .replace(/&/g, '&amp;')
-        .replace(/</g, '&lt;')
-        .replace(/>/g, '&gt;')
-        .replace(/"/g, '&quot;')
-        .replace(/'/g, '&#39;');
-}
-
 const MODULES = [
-    { id: 'variables', label: '变量判定',   desc: '变量判定模块的提示词配置' },
-    { id: 'goals',     label: '目标判定',   desc: '目标达成判定模块的提示词配置' },
-    { id: 'goals_ai_gen', label: '目标生成', desc: '目标智能自动生成模块的提示词配置' },
-    { id: 'storyline', label: '故事线判定', desc: '故事线进度分析模块的提示词配置' },
-    { id: 'backstage', label: '幕后生成',   desc: '幕后交互与生成模块的提示词配置' },
+    { id: 'backstage',         label: '幕后生成',  desc: '幕后交互与生成模块的提示词配置' },
+    { id: 'storyplan_events',  label: '日程推演',  desc: '推演 Day1/Day2/Day3/Future 事件卡，三色分类，u/c 双视角' },
+    { id: 'storyplan_threads', label: '脉络推进',  desc: '故事脉络状态推进与分析（萌芽→发酵→逼近→已爆发）' },
+    { id: 'storyplan_outline', label: '世界大纲',  desc: '全景剧情大纲，约 8 个关键节点，含 Beat/Scene/Subtext/Think 四层' },
+];
+
+const _SP_COMMON_PLACEHOLDERS = [
+    { key: '{{chat_history}}',      desc: '主线对话过滤脱敏后的历史记录' },
+    { key: '{{char_desc}}',         desc: '当前角色卡设定描述' },
+    { key: '{{user_desc}}',         desc: '当前 User Persona 设定' },
+    { key: '{{summary}}',           desc: '主线对话总结文本' },
+    { key: '{{world_info_before}}', desc: 'Depth 前插入的世界书条目' },
+    { key: '{{world_info_after}}',  desc: 'Depth 后插入的世界书条目' },
+    { key: '{{world_info_depth}}',  desc: '指定 Depth 深度注入的世界书条目' },
+    { key: '{{char}}',              desc: '当前角色名称 (别名: {{character}})' },
+    { key: '{{user}}',              desc: '当前用户名称' },
 ];
 
 const PLACEHOLDERS = {
-    variables:  [
-        { key: '{{plot_variables}}', desc: '当前所有已注册变量键值列表' },
-        { key: '{{chat_history}}',   desc: '对话历史' },
-    ],
-    goals:      [
-        { key: '{{plot_goals_active}}',   desc: '当前进行中/活跃的目标列表' },
-        { key: '{{chat_history}}', desc: '对话历史' },
-    ],
-    goals_ai_gen: [
-        { key: '{{char_desc}}',    desc: '角色设定描述' },
-        { key: '{{user_desc}}',    desc: '用户 Persona 描述' },
-        { key: '{{world_info}}',   desc: '世界书设定' },
-        { key: '{{chat_history}}', desc: '对话历史' },
-        { key: '{{summary}}',      desc: '对话总结' },
-    ],
-    storyline:  [
-        { key: '{{plot_storyline}}', desc: '当前激活故事线阶段信息' },
-        { key: '{{chat_history}}',     desc: '对话历史' },
-    ],
     backstage:  [
-        { key: '{{author_command}}',  desc: '幕后输入的干预文本' },
-        { key: '{{context_summary}}', desc: '当前核心状态汇总摘要' },
-        { key: '{{backstage_user_input}}', desc: '幕后模块用户的最新输入' },
-        { key: '{{backstage_chat_history}}', desc: '幕后模块的本地对话历史' },
+        { key: '{{backstage_user_input}}',   desc: '幕后模块用户的最新输入 (简写: {{bts_user_input}})' },
+        { key: '{{backstage_chat_history}}', desc: '幕后模块独立对话历史 (简写: {{bts_chat_history}})' },
+        ..._SP_COMMON_PLACEHOLDERS,
     ],
+    storyplan_events:  [..._SP_COMMON_PLACEHOLDERS],
+    storyplan_threads: [..._SP_COMMON_PLACEHOLDERS],
+    storyplan_outline: [..._SP_COMMON_PLACEHOLDERS],
 };
 
 // ── Preset helpers (same defaults as prompt-builder built-ins) ─────────────────
 
 const DEFAULT_PRESETS = {
-    global:    { 'default': { name: '默认预设' } },
-    variables: { 'default': { name: '默认预设' } },
-    goals:     { 'default': { name: '默认预设' } },
-    goals_ai_gen: { 'default': { name: '默认预设' } },
-    storyline: { 'default': { name: '默认预设' } },
-    backstage: { 'default': { name: '默认预设' } },
+    backstage:         { 'default': { name: '默认预设' } },
+    storyplan_events:  { 'default': { name: '默认预设' } },
+    storyplan_threads: { 'default': { name: '默认预设' } },
+    storyplan_outline: { 'default': { name: '默认预设' } },
 };
 
 function getPresetSettings() {
@@ -83,12 +65,12 @@ function getPresetSettings() {
     if (!plot.presets || typeof Object.values(plot.presets)[0] === 'string') {
         plot.presets = JSON.parse(JSON.stringify(DEFAULT_PRESETS));
     }
-    const cats = ['global','variables','goals','goals_ai_gen','storyline','backstage'];
+    const cats = ['backstage', 'storyplan_events', 'storyplan_threads', 'storyplan_outline'];
     cats.forEach(cat => {
         if (!plot.presets[cat]) plot.presets[cat] = { 'default': { name: '默认预设' } };
     });
     if (!plot.currentPreset || typeof plot.currentPreset === 'string') {
-        plot.currentPreset = { global: 'default', variables: 'default', goals: 'default', goals_ai_gen: 'default', storyline: 'default', backstage: 'default' };
+        plot.currentPreset = { backstage: 'default' };
     }
     cats.forEach(cat => {
         if (!plot.currentPreset[cat] || !plot.presets[cat][plot.currentPreset[cat]]) {
@@ -96,13 +78,12 @@ function getPresetSettings() {
         }
     });
     if (!plot.streamModules || typeof plot.streamModules !== 'object') {
-        plot.streamModules = {
-            variables: false,
-            goals: false,
-            storyline: false,
-            backstage: true
-        };
+        plot.streamModules = { backstage: true };
     }
+    // Self-heal: ensure storyplan stream defaults
+    ['storyplan_events', 'storyplan_threads', 'storyplan_outline'].forEach(m => {
+        if (plot.streamModules[m] === undefined) plot.streamModules[m] = true;
+    });
     return plot;
 }
 
@@ -329,8 +310,8 @@ const ROLE_LABELS = { system: 'System', user: 'User', assistant: 'AI' };
 // ── Main export ────────────────────────────────────────────────────────────────
 
 export async function renderPromptsTab(containerEl) {
-    let currentModule = localStorage.getItem('plot_active_prompts_category_id') || 'variables';
-    if (currentModule === 'global') currentModule = 'variables';
+    let currentModule = localStorage.getItem('plot_active_prompts_category_id') || 'backstage';
+    if (!MODULES.some(m => m.id === currentModule)) currentModule = 'backstage';
     const s = getPresetSettings();
 
     // ── Outer shell (module select + description + editor pane) ──────────────────
@@ -697,7 +678,7 @@ export async function renderPromptsTab(containerEl) {
             const isLast = idx === blocks.length - 1;
 
             card.innerHTML = `
-                <div style="display:flex; align-items:center; justify-content:space-between; gap:6px; padding:6px 8px; background:rgba(0,0,0,0.03); flex-wrap:nowrap; width:100%; box-sizing:border-box;">
+                <div style="display:flex; align-items:center; justify-content:space-between; gap:6px; padding:6px 8px; background:rgba(var(--SmartThemeBorderColor-rgb),0.06); flex-wrap:nowrap; width:100%; box-sizing:border-box;">
                     <!-- Left: Toggle + Role + Name + Badges -->
                     <div style="display:flex; align-items:center; gap:6px; flex:1; min-width:0;">
                         <!-- Enable toggle -->

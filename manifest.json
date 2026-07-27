@@ -6,8 +6,9 @@
     "js": "index.js",
     "css": "styles/main.css",
     "author": "Antigravity",
-    "version": "0.1.0",
+    "version": "0.5.0",
     "homePage": "",
+    "generate_interceptor": "worldEngineMemoryGenerateInterceptor",
     "hooks": {
         "activate": "init"
     }

@@ -32,46 +32,16 @@ export function setupAccordion(headerEl, bodyEl, iconEl = null, openByDefault = 
     });
 }
 
-// ── Tab switcher ──────────────────────────────────────────────────────────────
+// ── HTML Escape helper ─────────────────────────────────────────────────────────
 
 /**
- * Switch active tab and associated content pane.
- *
- * @param {NodeList|HTMLElement[]} tabBtns    - All tab button elements
- * @param {NodeList|HTMLElement[]} panelEls   - All panel elements
- * @param {string}                 activeTabId - dataset attribute name to match
- * @param {string}                 targetId    - ID value to activate
+ * Escape HTML characters in string.
+ * @param {string} text
+ * @returns {string}
  */
-export function switchTab(tabBtns, panelEls, activeTabId, targetId) {
-    tabBtns.forEach(btn => btn.classList.toggle('active', btn.dataset[activeTabId] === targetId));
-    panelEls.forEach(pane => {
-        pane.style.display = pane.dataset[activeTabId] === targetId ? '' : 'none';
-    });
-}
-
-// ── createElement helper ──────────────────────────────────────────────────────
-
-/**
- * Create an element with optional className, id, attributes, and children.
- *
- * @param {string} tag
- * @param {{ className?: string, id?: string, attrs?: Object, style?: string, children?: (HTMLElement|string)[] }} [opts]
- * @returns {HTMLElement}
- */
-export function createElement(tag, { className, id, attrs = {}, style, children = [] } = {}) {
-    const el = document.createElement(tag);
-    if (className) el.className = className;
-    if (id) el.id = id;
-    if (style) el.style.cssText = style;
-    Object.entries(attrs).forEach(([k, v]) => el.setAttribute(k, v));
-    children.forEach(child => {
-        if (typeof child === 'string') {
-            el.appendChild(document.createTextNode(child));
-        } else if (child instanceof HTMLElement) {
-            el.appendChild(child);
-        }
-    });
-    return el;
+export function escapeHtml(text) {
+    if (!text) return '';
+    return text.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
 }
 
 // ── World Info entry checklist ────────────────────────────────────────────────
@@ -136,7 +106,7 @@ export async function renderBookChecklist(targetEl, bookName, bookTypeLabel, sel
                     自选条目
                 </label>
             </div>
-            <div class="plot-wi-list-wrapper" style="border:1px solid var(--SmartThemeBorderColor); border-radius:4px; max-height:120px; overflow-y:auto; padding:6px; display:${isIndividualEnabled ? 'flex' : 'none'}; flex-direction:column; gap:4px; background:rgba(0,0,0,0.15); margin-bottom:6px;">
+            <div class="plot-wi-list-wrapper" style="border:1px solid var(--SmartThemeBorderColor); border-radius:4px; max-height:120px; overflow-y:auto; padding:6px; display:${isIndividualEnabled ? 'flex' : 'none'}; flex-direction:column; gap:4px; background:rgba(var(--SmartThemeBorderColor-rgb),0.1); margin-bottom:6px;">
                 ${listItems}
             </div>
         `;

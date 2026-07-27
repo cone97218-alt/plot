@@ -3,18 +3,14 @@
  * Provides get / set / subscribe. Does NOT handle persistence.
  */
 const _state = {
-    version: '0.4.0',
+    version: '0.5.0',
     modules: {},
-    variables: {},
-    goals: {},
-    storylines: {},
-    activeTab: 'settings',
+    activeTab: 'backstage',
     backstageActiveModeId: 'default',
     backstageActiveThemeId: 'default',
     backstageAvatarOption: 'show-frame',
     backstageStorageScope: 'chat',
     backstageHistory: [],
-    pinnedGoalIds: [],
     isLoading: false,
 };
 

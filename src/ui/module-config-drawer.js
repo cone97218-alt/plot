@@ -9,18 +9,9 @@ import { saveSettings } from '../../../../../../script.js';
 import { selected_world_info, loadWorldInfo } from '../../../../../world-info.js';
 import { listConnections } from '../core/api-client.js';
 import { getPlotValue, savePlotValue } from '../core/indexeddb.js';
-import { renderBookChecklist, setupAccordion, subscribeWIRefresh } from '../utils/dom.js';
+import { renderBookChecklist, setupAccordion, subscribeWIRefresh, escapeHtml } from '../utils/dom.js';
 import { get } from '../core/store.js';
-
-// Helper to escape HTML safely
-function escapeHtml(text) {
-    return String(text || '')
-        .replace(/&/g, '&amp;')
-        .replace(/</g, '&lt;')
-        .replace(/>/g, '&gt;')
-        .replace(/"/g, '&quot;')
-        .replace(/'/g, '&#39;');
-}
+import { DEFAULT_INJECT_PREFIX, DEFAULT_INJECT_SUFFIX } from '../core/injector.js';
 
 /**
  * Get all modes for a module (saved in global settings)
@@ -141,7 +132,7 @@ export async function getActiveModeConfig(moduleId) {
 
 /**
  * Creates and mounts a configuration drawer inside containerEl.
- * @param {string} moduleId - e.g. 'goals', 'variables', 'storyline'
+ * @param {string} moduleId - e.g. 'backstage'
  * @param {HTMLElement} containerEl - Parent container where drawer will be mounted
  * @param {Function} onSave - Callback(newConfig) when save is successful
  * @returns {Object} { show: () => void, hide: () => void }
@@ -160,7 +151,7 @@ export function createModuleConfigDrawer(moduleId, containerEl, onSave) {
     `;
     
     drawer.innerHTML = `
-        <div class="plot-bts-drawer-header" style="display:flex; justify-content:space-between; align-items:center; padding:10px 14px; border-bottom:1px solid var(--SmartThemeBorderColor); background-color:var(--SmartThemeChatTintColor); flex-shrink:0;">
+        <div class="plot-bts-drawer-header" style="display:flex; justify-content:space-between; align-items:center; padding:10px 14px; border-bottom:1px solid var(--SmartThemeBorderColor); background-color:rgba(var(--SmartThemeBorderColor-rgb, 128, 128, 128), 0.08); flex-shrink:0;">
             <span class="plot-bts-drawer-title" style="font-weight:bold; color:var(--SmartThemeEmColor); font-size:0.95em;"><i class="fa-solid fa-sliders"></i> 配置模块选项</span>
             <i class="fa-solid fa-xmark plot-drawer-close-btn" style="cursor:pointer; font-size:1.3em; color:var(--SmartThemeEmColor); padding:4px;"></i>
         </div>
@@ -185,8 +176,6 @@ export function createModuleConfigDrawer(moduleId, containerEl, onSave) {
             <div class="plot-sub-tab-bar" id="plot-drawer-tabs" style="margin-bottom: 10px; display: flex; gap: 4px; border-bottom: 1px solid var(--SmartThemeBorderColor); padding-bottom: 6px; flex-shrink: 0;">
                 <button class="plot-sub-tab active" data-tab="general" style="padding: 4px 10px; font-size: 0.82em;"><i class="fa-solid fa-sliders"></i> 常规</button>
                 <button class="plot-sub-tab" data-tab="reading" style="padding: 4px 10px; font-size: 0.82em;"><i class="fa-solid fa-book-open"></i> 读取</button>
-                <button class="plot-sub-tab" data-tab="display" id="plot-drawer-tab-btn-display" style="display: none; padding: 4px 10px; font-size: 0.82em;"><i class="fa-solid fa-desktop"></i> 显示</button>
-                <button class="plot-sub-tab" data-tab="injection" id="plot-drawer-tab-btn-inject" style="display: none; padding: 4px 10px; font-size: 0.82em;"><i class="fa-solid fa-message"></i> 注入</button>
             </div>
 
             <!-- Tab Content: General -->
@@ -206,6 +195,29 @@ export function createModuleConfigDrawer(moduleId, containerEl, onSave) {
                         <label class="plot-label">绑定目标生成预设</label>
                         <select class="plot-drawer-preset-gen-select plot-select" style="width:100%;"></select>
                     </div>
+                </div>
+
+                <div class="plot-setting-group" id="plot-drawer-preset-group-storyplan" style="display:none; flex-direction:column; gap:8px;">
+                    <div>
+                        <label class="plot-label">绑定日程推演预设</label>
+                        <select class="plot-drawer-sp-events-preset plot-select" style="width:100%;"></select>
+                    </div>
+                    <div>
+                        <label class="plot-label">绑定脉络推进预设</label>
+                        <select class="plot-drawer-sp-threads-preset plot-select" style="width:100%;"></select>
+                    </div>
+                    <div>
+                        <label class="plot-label">绑定世界大纲预设</label>
+                        <select class="plot-drawer-sp-outline-preset plot-select" style="width:100%;"></select>
+                    </div>
+                </div>
+
+                <div class="plot-setting-group plot-drawer-sp-inject-custom" style="display:none; flex-direction:column; gap:8px; border-top:1px solid var(--SmartThemeBorderColor); padding-top:10px;">
+                    <label class="plot-label" style="font-weight:bold;">注入输入框前缀 (Prefix)</label>
+                    <textarea class="plot-drawer-sp-prefix-input plot-input" rows="3" style="font-size:0.82em; resize:vertical; font-family:monospace;"></textarea>
+
+                    <label class="plot-label" style="font-weight:bold;">注入输入框后缀 (Suffix)</label>
+                    <textarea class="plot-drawer-sp-suffix-input plot-input" rows="2" style="font-size:0.82em; resize:vertical; font-family:monospace;"></textarea>
                 </div>
                 
                 <div style="font-size:0.75em; color:var(--SmartThemeEmColor); margin-top:-6px; margin-bottom: 10px;">
@@ -237,7 +249,7 @@ export function createModuleConfigDrawer(moduleId, containerEl, onSave) {
                         
                         <!-- Accordion 1: 对话历史 -->
                         <div class="plot-accordion-section">
-                            <div class="plot-accordion-header plot-drawer-acc-hdr-history" style="cursor:pointer; display:flex; justify-content:space-between; align-items:center; padding:10px 14px; background:rgba(0,0,0,0.05); border-bottom: none;">
+                            <div class="plot-accordion-header plot-drawer-acc-hdr-history" style="cursor:pointer; display:flex; justify-content:space-between; align-items:center; padding:10px 14px; background:rgba(var(--SmartThemeBorderColor-rgb),0.08); border-bottom: none;">
                                 <span class="plot-accordion-title" style="font-weight:600; font-size:0.88em;">对话历史</span>
                                 <i class="fa-solid fa-chevron-down plot-accordion-icon" style="font-size:0.85em;"></i>
                             </div>
@@ -250,7 +262,7 @@ export function createModuleConfigDrawer(moduleId, containerEl, onSave) {
                                 
                                 <!-- 二级折叠条: 正则裁剪 -->
                                 <div class="plot-accordion-section" style="border:1px solid var(--SmartThemeBorderColor); border-radius:4px; overflow:hidden; margin-top:10px;">
-                                    <div class="plot-accordion-header plot-drawer-acc-hdr-regex" style="cursor:pointer; display:flex; justify-content:space-between; align-items:center; padding:8px 12px; background:rgba(0,0,0,0.05);">
+                                    <div class="plot-accordion-header plot-drawer-acc-hdr-regex" style="cursor:pointer; display:flex; justify-content:space-between; align-items:center; padding:8px 12px; background:rgba(var(--SmartThemeBorderColor-rgb),0.08);">
                                         <span class="plot-accordion-title" style="font-size:0.85em;">正则裁剪规则</span>
                                         <i class="fa-solid fa-chevron-down plot-accordion-icon" style="font-size:0.85em;"></i>
                                     </div>
@@ -266,7 +278,7 @@ export function createModuleConfigDrawer(moduleId, containerEl, onSave) {
 
                         <!-- Accordion 2: 设定与描述 -->
                         <div class="plot-accordion-section" style="border-top:1px solid var(--SmartThemeBorderColor);">
-                            <div class="plot-accordion-header plot-drawer-acc-hdr-persona" style="cursor:pointer; display:flex; justify-content:space-between; align-items:center; padding:10px 14px; background:rgba(0,0,0,0.05);">
+                            <div class="plot-accordion-header plot-drawer-acc-hdr-persona" style="cursor:pointer; display:flex; justify-content:space-between; align-items:center; padding:10px 14px; background:rgba(var(--SmartThemeBorderColor-rgb),0.08);">
                                 <span class="plot-accordion-title" style="font-weight:600; font-size:0.88em;">设定与描述</span>
                                 <i class="fa-solid fa-chevron-down plot-accordion-icon" style="font-size:0.85em;"></i>
                             </div>
@@ -284,7 +296,7 @@ export function createModuleConfigDrawer(moduleId, containerEl, onSave) {
 
                         <!-- Accordion 3: 世界书设定 -->
                         <div class="plot-accordion-section" style="border-top:1px solid var(--SmartThemeBorderColor);">
-                            <div class="plot-accordion-header plot-drawer-acc-hdr-lore" style="cursor:pointer; display:flex; justify-content:space-between; align-items:center; padding:10px 14px; background:rgba(0,0,0,0.05);">
+                            <div class="plot-accordion-header plot-drawer-acc-hdr-lore" style="cursor:pointer; display:flex; justify-content:space-between; align-items:center; padding:10px 14px; background:rgba(var(--SmartThemeBorderColor-rgb),0.08);">
                                 <span class="plot-accordion-title" style="font-weight:600; font-size:0.88em;">世界书设定</span>
                                 <i class="fa-solid fa-chevron-down plot-accordion-icon" style="font-size:0.85em;"></i>
                             </div>
@@ -322,7 +334,7 @@ export function createModuleConfigDrawer(moduleId, containerEl, onSave) {
 
                                 <!-- 全局过滤设置 -->
                                 <div class="plot-accordion-section" style="border: 1px solid var(--SmartThemeBorderColor); border-radius: 4px; overflow: hidden; margin-top: 10px;">
-                                    <div class="plot-accordion-header plot-drawer-acc-hdr-wi-filter" style="cursor:pointer; display:flex; justify-content:space-between; align-items:center; padding:6px 12px; background:rgba(0,0,0,0.05);">
+                                    <div class="plot-accordion-header plot-drawer-acc-hdr-wi-filter" style="cursor:pointer; display:flex; justify-content:space-between; align-items:center; padding:6px 12px; background:rgba(var(--SmartThemeBorderColor-rgb),0.08);">
                                         <span class="plot-accordion-title" style="font-size:0.82em;">全局过滤设置</span>
                                         <i class="fa-solid fa-chevron-down plot-accordion-icon" style="font-size:0.82em;"></i>
                                     </div>
@@ -342,7 +354,7 @@ export function createModuleConfigDrawer(moduleId, containerEl, onSave) {
 
                         <!-- Accordion 4: 其他参数与JS表达式 -->
                         <div class="plot-accordion-section" style="border-top:1px solid var(--SmartThemeBorderColor);">
-                            <div class="plot-accordion-header plot-drawer-acc-hdr-other" style="cursor:pointer; display:flex; justify-content:space-between; align-items:center; padding:10px 14px; background:rgba(0,0,0,0.05);">
+                            <div class="plot-accordion-header plot-drawer-acc-hdr-other" style="cursor:pointer; display:flex; justify-content:space-between; align-items:center; padding:10px 14px; background:rgba(var(--SmartThemeBorderColor-rgb),0.08);">
                                 <span class="plot-accordion-title" style="font-weight:600; font-size:0.88em;">其他参数与JS表达式</span>
                                 <i class="fa-solid fa-chevron-down plot-accordion-icon" style="font-size:0.85em;"></i>
                             </div>
@@ -359,111 +371,8 @@ export function createModuleConfigDrawer(moduleId, containerEl, onSave) {
 
                     </div>
                 </div>
-            </div>
-
-            <!-- Tab Content: Display -->
-            <div class="plot-drawer-tab-content" data-tab="display" style="display: none; flex-direction: column; gap: 14px;">
-                <!-- Goals Display Fields Settings (Goals-specific) -->
-                <div class="plot-setting-group" id="plot-goals-display-settings" style="border-top: none; padding-top: 0; margin-top: 0;">
-                    <label class="plot-label">显示字段配置</label>
-                    <div style="display: flex; gap: 12px; flex-wrap: wrap; font-size: 0.85em; margin-top: 4px;">
-                        <label style="display: flex; align-items: center; gap: 4px; cursor: pointer;">
-                            <input type="checkbox" class="plot-drawer-display-desc-chk"> 显示任务描述
-                        </label>
-                        <label style="display: flex; align-items: center; gap: 4px; cursor: pointer;">
-                            <input type="checkbox" class="plot-drawer-display-status-chk"> 显示任务状态
-                        </label>
-                        <label style="display: flex; align-items: center; gap: 4px; cursor: pointer;">
-                            <input type="checkbox" class="plot-drawer-display-type-chk"> 显示分类徽章
-                        </label>
-                    </div>
-                </div>
-                
-                <!-- RPG Panel Customizer (Goals-specific) -->
-                <div class="plot-setting-group" id="plot-goals-rpg-settings" style="border-top: 1px solid var(--SmartThemeBorderColor); padding-top: 8px; margin-top: 8px;">
-                    <label style="display:flex; align-items:center; gap:8px; font-size:0.92em; font-weight:bold; cursor:pointer; margin-bottom: 6px;">
-                        <input type="checkbox" class="plot-drawer-rpg-enabled-chk"> 开启 RPG 面板模式
-                    </label>
-                    <div class="plot-rpg-config-container" style="display: none; flex-direction: column; gap: 8px;">
-                        <div style="display: flex; align-items: center; gap: 8px;">
-                            <span class="plot-hint-text" style="font-size:0.8em; opacity:0.8; white-space:nowrap;">分类字段名:</span>
-                            <input type="text" class="plot-drawer-rpg-field-input plot-input" placeholder="例如 category" style="flex:1; height:24px; padding:2px 6px; font-size:0.8em;" value="category">
-                            <button id="plot-drawer-scan-rpg-btn" class="menu_button plot-btn" style="padding: 2px 8px; font-size: 0.75em;" title="扫描所有任务数据，生成当前分类列表"><i class="fa-solid fa-wand-magic-sparkles"></i> 扫描分类</button>
-                        </div>
-                        <div id="plot-drawer-rpg-layouts-list" style="display: flex; flex-direction: column; gap: 6px; margin-top: 4px; max-height: 250px; overflow-y: auto; overflow-x: hidden; box-sizing: border-box; padding: 4px; border: 1px dashed var(--SmartThemeBorderColor); border-radius: 4px; background: rgba(0,0,0,0.1);">
-                            <!-- Dynamic RPG category layouts config render here -->
-                        </div>
-                    </div>
-                </div>
-                
-                <!-- Goals Custom Badges Settings (Goals-specific) -->
-                <div class="plot-setting-group" id="plot-goals-badges-settings" style="border-top: 1px solid var(--SmartThemeBorderColor); padding-top: 8px; margin-top: 8px;">
-                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px;">
-                        <label class="plot-label">自定义徽章映射与颜色</label>
-                        <div style="display: flex; gap: 6px;">
-                            <button id="plot-drawer-scan-badges-btn" class="menu_button plot-btn" style="padding: 1px 6px; font-size: 0.72em;" title="扫描当前全部任务数据，自动导入未映射的自定义字段"><i class="fa-solid fa-arrows-spin"></i> 扫描已有字段</button>
-                            <button id="plot-drawer-add-badge-rule-btn" class="menu_button plot-btn" style="padding: 1px 6px; font-size: 0.72em;"><i class="fa-solid fa-plus"></i> 添加徽章</button>
-                        </div>
-                    </div>
-                    <div id="plot-drawer-badges-rules-list" style="display: flex; flex-direction: column; gap: 6px; max-height: 200px; overflow-y: auto; overflow-x: hidden; box-sizing: border-box; padding: 4px; border: 1px dashed var(--SmartThemeBorderColor); border-radius: 4px; background: rgba(0,0,0,0.1);">
-                        <!-- Badges rules list renders here -->
-                    </div>
-                </div>
-            </div>
-
-            <!-- Tab Content: Injection -->
-            <div class="plot-drawer-tab-content" data-tab="injection" style="display: none; flex-direction: column; gap: 14px;">
-                <!-- Goals Prompt Injection Settings (Goals-specific) -->
-                <div class="plot-setting-group" id="plot-goals-injection-settings" style="border-top: none; padding-top: 0; margin-top: 0;">
-                    <label style="display:flex; align-items:center; gap:8px; font-size:0.92em; font-weight:bold; cursor:pointer; margin-bottom: 6px;">
-                        <input type="checkbox" class="plot-drawer-inject-enabled-chk">
-                        启用剧情目标详细注入到主聊天
-                    </label>
-                    <div class="plot-goals-inject-container" style="display: none; flex-direction: column; gap: 8px;">
-                        <div>
-                            <label class="plot-label" style="font-size: 0.85em;">主聊天注入大模板 (Prompt Template)</label>
-                            <textarea class="plot-drawer-inject-template plot-input" rows="4" style="width:100%; font-size:0.85em; font-family: monospace; resize: vertical;" placeholder="例如:
-当前任务:
-{{plot_goals_active}}"></textarea>
-                            <span class="plot-hint-text">支持宏: {{plot_goals_active}} (进行中), {{plot_goals_complete}} (已完成), {{plot_goals_failed}} (已失败), {{plot_goals_all}} (全部)</span>
-                        </div>
-                        <div>
-                            <label class="plot-label" style="font-size: 0.85em;">默认行模板 (Default Line Template)</label>
-                            <input type="text" class="plot-drawer-inject-line-template plot-input" style="width:100%; font-size:0.85em;" placeholder="【{{title}}】{{desc}}">
-                            <span class="plot-hint-text">支持占位符: {{title}}, {{desc}} 以及自定义扩展属性名称。</span>
-                        </div>
-                    </div>
-                </div>
-
-                <!-- Variables Prompt Injection Settings (Variables-specific) -->
-                <div class="plot-setting-group" id="plot-variables-injection-settings" style="border-top: none; padding-top: 0; margin-top: 0; display: none;">
-                    <label style="display:flex; align-items:center; gap:8px; font-size:0.92em; font-weight:bold; cursor:pointer; margin-bottom: 6px;">
-                        <input type="checkbox" class="plot-drawer-var-inject-enabled-chk">
-                        启用变量世界状态详细注入到主聊天
-                    </label>
-                    <div class="plot-variables-inject-container" style="display: none; flex-direction: column; gap: 8px;">
-                        <label style="display:flex; align-items:center; gap:8px; font-size:0.85em; cursor:pointer; margin-bottom: 4px;">
-                            <input type="checkbox" class="plot-drawer-var-inject-all-chk">
-                            同时注入被隐藏的变量 (默认仅注入可见变量)
-                        </label>
-                        <div>
-                            <label class="plot-label" style="font-size: 0.85em;">主聊天注入大模板 (Prompt Template)</label>
-                            <textarea class="plot-drawer-var-inject-template plot-input" rows="4" style="width:100%; font-size:0.85em; font-family: monospace; resize: vertical;" placeholder="例如:
-当前状态:
-{{plot_variables_visible}}"></textarea>
-                            <span class="plot-hint-text">支持宏: {{plot_variables_visible}} (可见变量), {{plot_variables_hidden}} (隐藏变量), {{plot_variables_all}} (全部)</span>
-                        </div>
-                        <div>
-                            <label class="plot-label" style="font-size: 0.85em;">默认行模板 (Default Line Template)</label>
-                            <input type="text" class="plot-drawer-var-inject-line-template plot-input" style="width:100%; font-size:0.85em;" placeholder="- {{name}}: {{value}}">
-                            <span class="plot-hint-text">支持占位符: {{name}}, {{id}}, {{value}}, {{value_tree}} (JSON树状展开), {{desc}}, {{type}}</span>
-                        </div>
-                    </div>
-                </div>
-            </div>
-
-        </div>
-        <div style="border-top:1px solid var(--SmartThemeBorderColor); padding:10px 14px; background-color:var(--SmartThemeChatTintColor); display:flex; justify-content:flex-end; gap:8px; flex-shrink:0;">
+            </div>        </div>
+        <div style="border-top:1px solid var(--SmartThemeBorderColor); padding:10px 14px; background-color:rgba(var(--SmartThemeBorderColor-rgb, 128, 128, 128), 0.08); display:flex; justify-content:flex-end; gap:8px; flex-shrink:0;">
             <button class="plot-drawer-cancel-btn plot-btn" style="padding:6px 16px; font-size:0.9em;">取消</button>
             <button class="plot-drawer-save-btn plot-btn" style="padding:6px 16px; font-size:0.9em; background-color:var(--SmartThemeEmColor); color:var(--SmartThemeInputBgColor); font-weight:bold; border-color:var(--SmartThemeEmColor);">保存</button>
         </div>
@@ -484,8 +393,6 @@ export function createModuleConfigDrawer(moduleId, containerEl, onSave) {
     const modeDelBtn = drawer.querySelector('.plot-drawer-mode-del-btn');
     
     const presetSelect = drawer.querySelector('.plot-drawer-preset-select');
-    const presetEvalSelect = drawer.querySelector('.plot-drawer-preset-eval-select');
-    const presetGenSelect = drawer.querySelector('.plot-drawer-preset-gen-select');
     const connToggle = drawer.querySelector('.plot-drawer-conn-toggle');
     const connContainer = drawer.querySelector('.plot-drawer-conn-container');
     const connSelect = drawer.querySelector('.plot-drawer-connection-select');
@@ -523,28 +430,14 @@ export function createModuleConfigDrawer(moduleId, containerEl, onSave) {
     setupAccordion(drawer.querySelector('.plot-drawer-acc-hdr-other'), drawer.querySelector('.plot-drawer-acc-body-other'));
     
     // ── Toggle visibility listeners ──
-    connToggle.addEventListener('change', () => {
-        connContainer.style.display = connToggle.checked ? 'flex' : 'none';
-    });
-    readToggle.addEventListener('change', () => {
-        readContainer.style.display = readToggle.checked ? 'flex' : 'none';
-    });
-    
-    // Toggle for goals injection setting
-    const goalsInjectChk = drawer.querySelector('.plot-drawer-inject-enabled-chk');
-    const goalsInjectContainer = drawer.querySelector('.plot-goals-inject-container');
-    if (goalsInjectChk && goalsInjectContainer) {
-        goalsInjectChk.addEventListener('change', () => {
-            goalsInjectContainer.style.display = goalsInjectChk.checked ? 'flex' : 'none';
+    if (connToggle && connContainer) {
+        connToggle.addEventListener('change', () => {
+            connContainer.style.display = connToggle.checked ? 'flex' : 'none';
         });
     }
-
-    // Toggle for variables injection setting
-    const varsInjectChk = drawer.querySelector('.plot-drawer-var-inject-enabled-chk');
-    const varsInjectContainer = drawer.querySelector('.plot-variables-inject-container');
-    if (varsInjectChk && varsInjectContainer) {
-        varsInjectChk.addEventListener('change', () => {
-            varsInjectContainer.style.display = varsInjectChk.checked ? 'flex' : 'none';
+    if (readToggle && readContainer) {
+        readToggle.addEventListener('change', () => {
+            readContainer.style.display = readToggle.checked ? 'flex' : 'none';
         });
     }
     
@@ -556,9 +449,19 @@ export function createModuleConfigDrawer(moduleId, containerEl, onSave) {
         if (!mode) return;
         
         mode.name = modeNameInput.value.trim() || '未命名模式';
-        if (moduleId === 'goals') {
-            mode.presetId = presetEvalSelect?.value ?? 'default';
-            mode.generationPresetId = presetGenSelect?.value ?? 'default';
+        if (moduleId === 'storyplan') {
+            mode.presets = {
+                storyplan_events: drawer.querySelector('.plot-drawer-sp-events-preset')?.value || 'default',
+                storyplan_threads: drawer.querySelector('.plot-drawer-sp-threads-preset')?.value || 'default',
+                storyplan_outline: drawer.querySelector('.plot-drawer-sp-outline-preset')?.value || 'default',
+            };
+            mode.presetId = mode.presets.storyplan_events; // fallback
+
+            const s = getContext().extensionSettings.plot;
+            const prefixVal = drawer.querySelector('.plot-drawer-sp-prefix-input')?.value;
+            const suffixVal = drawer.querySelector('.plot-drawer-sp-suffix-input')?.value;
+            if (prefixVal !== undefined) s.injectPrefix = prefixVal;
+            if (suffixVal !== undefined) s.injectSuffix = suffixVal;
         } else {
             mode.presetId = presetSelect?.value ?? 'default';
         }
@@ -582,84 +485,17 @@ export function createModuleConfigDrawer(moduleId, containerEl, onSave) {
         mode.reading.disabledRegexIds = [...localDisabledRegexIds];
         mode.reading.summaryJsExpression = drawer.querySelector('.plot-drawer-read-summary-expr')?.value.trim() ?? '';
         
-        if (moduleId === 'goals') {
-            mode.display = {
-                showDesc: drawer.querySelector('.plot-drawer-display-desc-chk')?.checked ?? false,
-                showStatus: drawer.querySelector('.plot-drawer-display-status-chk')?.checked ?? true,
-                showType: drawer.querySelector('.plot-drawer-display-type-chk')?.checked ?? false
-            };
-
-            // Save RPG panel settings
-            const rpgEnabled = drawer.querySelector('.plot-drawer-rpg-enabled-chk')?.checked ?? false;
-            const rpgField = drawer.querySelector('.plot-drawer-rpg-field-input')?.value.trim() || 'category';
-            const rpgLayouts = {};
-            drawer.querySelectorAll('#plot-drawer-rpg-layouts-list .plot-rpg-layout-row').forEach(row => {
-                const cat = row.dataset.category;
-                const layout = row.querySelector('.rpg-layout-select')?.value ?? 'tree';
-                const showFields = [];
-                row.querySelectorAll('.rpg-attr-chk:checked').forEach(chk => {
-                    showFields.push(chk.dataset.attr);
-                });
-                if (cat) {
-                    rpgLayouts[cat] = { layout, showFields };
-                }
-            });
-            mode.rpgConfig = {
-                enabled: rpgEnabled,
-                categoryField: rpgField,
-                layouts: rpgLayouts
-            };
-            
-            // Save badges
-            const finalBadges = {};
-            drawer.querySelectorAll('#plot-drawer-badges-rules-list .plot-badge-rule-row').forEach(row => {
-                const key = row.querySelector('.badge-key')?.value.trim();
-                const label = row.querySelector('.badge-label')?.value.trim();
-                const color = row.querySelector('.badge-color')?.value.trim();
-                const bgColor = row.querySelector('.badge-bg-color')?.value.trim();
-                const borderColor = row.querySelector('.badge-border-color')?.value.trim();
-                if (key && label) {
-                    finalBadges[key] = { label, color, bgColor, borderColor };
-                }
-            });
-            if (!getContext().extensionSettings.plot) getContext().extensionSettings.plot = {};
-            getContext().extensionSettings.plot.customBadges = finalBadges;
-            
-            // Save global goal injection settings
-            getContext().extensionSettings.plot.goalInjection = {
-                enabled: drawer.querySelector('.plot-drawer-inject-enabled-chk')?.checked ?? false,
-                template: drawer.querySelector('.plot-drawer-inject-template')?.value ?? '',
-                lineTemplate: drawer.querySelector('.plot-drawer-inject-line-template')?.value.trim() ?? ''
-            };
-        }
-
-        if (moduleId === 'variables') {
-            if (!getContext().extensionSettings.plot) getContext().extensionSettings.plot = {};
-            getContext().extensionSettings.plot.variablesInjection = {
-                enabled: drawer.querySelector('.plot-drawer-var-inject-enabled-chk')?.checked ?? true,
-                injectAll: drawer.querySelector('.plot-drawer-var-inject-all-chk')?.checked ?? false,
-                template: drawer.querySelector('.plot-drawer-var-inject-template')?.value ?? '',
-                lineTemplate: drawer.querySelector('.plot-drawer-var-inject-line-template')?.value.trim() ?? ''
-            };
-        }
-        
         getContext().extensionSettings.plot[`${moduleId}Modes`] = modes;
         getContext().saveSettingsDebounced?.();
         await saveSettings();
         
         console.log('[Plot] Settings successfully saved for module:', moduleId, 'mode:', mode);
-        if (typeof toastr !== 'undefined') {
-            toastr.success(`已成功保存模式「${mode.name}」的配置选项！`);
-        }
         
         if (onSave) {
             await onSave(mode);
         }
         } catch (err) {
             console.error('[Plot] doSave error:', err);
-            if (typeof toastr !== 'undefined') {
-                toastr.error(`保存配置失败: ${err.message}`);
-            }
         }
     };
 
@@ -680,14 +516,11 @@ export function createModuleConfigDrawer(moduleId, containerEl, onSave) {
     saveBtn.addEventListener('click', async () => { await doSave(); hideOnly(); });
     
     modeAddBtn.addEventListener('click', async () => {
-        const name = prompt('请输入新模式名称:');
-        if (!name || !name.trim()) return;
-        
         const modes = getModuleModes(moduleId);
         const id = 'mode_' + Date.now();
         const newMode = {
             id,
-            name: name.trim(),
+            name: `模式 ${modes.length + 1}`,
             presetId: 'default',
             useCustomConnection: false,
             connectionId: 'default',
@@ -721,25 +554,20 @@ export function createModuleConfigDrawer(moduleId, containerEl, onSave) {
     
     modeDelBtn.addEventListener('click', async () => {
         const modes = getModuleModes(moduleId);
-        if (modes.length <= 1) {
-            alert('至少需要保留一个模式，无法删除最后一个模式。');
-            return;
-        }
+        if (modes.length <= 1) return;
         
-        if (confirm(`确定要删除当前模式【${modeNameInput.value}】吗？`)) {
-            const updated = modes.filter(m => m.id !== currentModeId);
-            getContext().extensionSettings.plot[`${moduleId}Modes`] = updated;
-            
-            await setActiveModeId(moduleId, updated[0].id);
-            await saveSettings();
-            
-            const modesNew = getModuleModes(moduleId);
-            const activeMode = modesNew.find(m => m.id === updated[0].id) || modesNew[0];
-            if (onSave) {
-                await onSave(activeMode);
-            }
-            await show();
+        const updated = modes.filter(m => m.id !== currentModeId);
+        getContext().extensionSettings.plot[`${moduleId}Modes`] = updated;
+        
+        await setActiveModeId(moduleId, updated[0].id);
+        await saveSettings();
+        
+        const modesNew = getModuleModes(moduleId);
+        const activeMode = modesNew.find(m => m.id === updated[0].id) || modesNew[0];
+        if (onSave) {
+            await onSave(activeMode);
         }
+        await show();
     });
     
     // ── Lorebook checklist rendering ──
@@ -830,7 +658,7 @@ export function createModuleConfigDrawer(moduleId, containerEl, onSave) {
         // 1. Render Global rules
         globalRules.forEach((rule) => {
             const row = document.createElement('div');
-            row.style.cssText = 'display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:6px; padding:6px; border-bottom:1px solid rgba(255,255,255,0.05); font-size:0.85em; background:var(--SmartThemeChatTintColor); border:1px solid var(--SmartThemeBorderColor); border-radius:4px; margin-bottom: 4px;';
+            row.style.cssText = 'display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:6px; padding:6px; border-bottom:1px solid rgba(255,255,255,0.05); font-size:0.85em; background:rgba(var(--SmartThemeBorderColor-rgb, 128, 128, 128), 0.08); border:1px solid var(--SmartThemeBorderColor); border-radius:4px; margin-bottom: 4px;';
             
             const isChecked = !localDisabledRegexIds.includes(rule.id);
             const actionLabel = rule.action === 'delete' ? '删除匹配' : (rule.action === 'keep' ? '仅保留匹配' : `替换: ${rule.replace || '""'}`);
@@ -850,7 +678,7 @@ export function createModuleConfigDrawer(moduleId, containerEl, onSave) {
         // 2. Render Mode-specific rules
         localRegexRules.forEach((rule, idx) => {
             const row = document.createElement('div');
-            row.style.cssText = 'display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:6px; padding:6px; border-bottom:1px solid rgba(255,255,255,0.05); font-size:0.85em; background:var(--SmartThemeChatTintColor); border:1px solid var(--SmartThemeBorderColor); border-radius:4px; margin-bottom: 4px;';
+            row.style.cssText = 'display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:6px; padding:6px; border-bottom:1px solid rgba(255,255,255,0.05); font-size:0.85em; background:rgba(var(--SmartThemeBorderColor-rgb, 128, 128, 128), 0.08); border:1px solid var(--SmartThemeBorderColor); border-radius:4px; margin-bottom: 4px;';
             
             const isChecked = !rule.disabled;
             const actionLabel = rule.action === 'delete' ? '删除匹配' : (rule.action === 'keep' ? '仅保留匹配' : `替换: ${rule.replace || '""'}`);
@@ -958,7 +786,7 @@ export function createModuleConfigDrawer(moduleId, containerEl, onSave) {
             box-sizing: border-box;
         `;
         overlay.innerHTML = `
-            <div style="width: 320px; background: var(--SmartThemeChatTintColor); border: 1px solid var(--SmartThemeBorderColor); border-radius: 8px; padding: 15px; box-shadow: 0 4px 15px rgba(0,0,0,0.3); display: flex; flex-direction: column; gap: 10px;">
+            <div style="width: 320px; background: rgba(var(--SmartThemeBlurTintColor-rgb, 20, 20, 30), 0.95); border: 1px solid var(--SmartThemeBorderColor); border-radius: 8px; padding: 15px; box-shadow: 0 4px 15px rgba(0,0,0,0.3); display: flex; flex-direction: column; gap: 10px;">
                 <div style="font-weight: bold; color: var(--SmartThemeEmColor); border-bottom: 1px solid var(--SmartThemeBorderColor); padding-bottom: 6px; margin-bottom: 4px; font-size:0.95em;">编辑模块正则裁剪规则</div>
                 <div class="plot-setting-group">
                     <label class="plot-label" style="font-size: 0.8em;">规则名称</label>
@@ -1043,20 +871,6 @@ export function createModuleConfigDrawer(moduleId, containerEl, onSave) {
             content.style.display = content.dataset.tab === 'general' ? 'flex' : 'none';
         });
 
-        // Toggle displaying display and injection tab buttons based on module type
-        const displayTabBtn = drawer.querySelector('#plot-drawer-tab-btn-display');
-        const injectTabBtn = drawer.querySelector('#plot-drawer-tab-btn-inject');
-        if (moduleId === 'goals' || moduleId === 'variables') {
-            if (injectTabBtn) injectTabBtn.style.display = 'block';
-        } else {
-            if (injectTabBtn) injectTabBtn.style.display = 'none';
-        }
-
-        if (moduleId === 'goals') {
-            if (displayTabBtn) displayTabBtn.style.display = 'block';
-        } else {
-            if (displayTabBtn) displayTabBtn.style.display = 'none';
-        }
         // Load active mode and config
         currentModeId = await getActiveModeId(moduleId);
         localConfig = await getActiveModeConfig(moduleId);
@@ -1069,23 +883,42 @@ export function createModuleConfigDrawer(moduleId, containerEl, onSave) {
         modeNameInput.value = localConfig.name || '默认模式';
         
         // Preset selects
-        if (moduleId === 'goals') {
+        if (moduleId === 'storyplan') {
             drawer.querySelector('#plot-drawer-preset-group-single').style.display = 'none';
-            drawer.querySelector('#plot-drawer-preset-group-split').style.display = 'flex';
-            
-            const presetsEval = extension_settings.plot?.presets?.['goals'] || {};
-            presetEvalSelect.innerHTML = Object.entries(presetsEval)
-                .map(([id, p]) => `<option value="${id}" ${id === (localConfig.presetId || 'default') ? 'selected' : ''}>${escapeHtml(p.name)}</option>`)
-                .join('');
-                
-            const presetsGen = extension_settings.plot?.presets?.['goals_ai_gen'] || {};
-            presetGenSelect.innerHTML = Object.entries(presetsGen)
-                .map(([id, p]) => `<option value="${id}" ${id === (localConfig.generationPresetId || 'default') ? 'selected' : ''}>${escapeHtml(p.name)}</option>`)
-                .join('');
+            drawer.querySelector('#plot-drawer-preset-group-split').style.display = 'none';
+            drawer.querySelector('#plot-drawer-preset-group-storyplan').style.display = 'flex';
+
+            const spInjectContainer = drawer.querySelector('.plot-drawer-sp-inject-custom');
+            if (spInjectContainer) {
+                spInjectContainer.style.display = 'flex';
+                const s = extension_settings.plot || {};
+                const prefixInput = drawer.querySelector('.plot-drawer-sp-prefix-input');
+                const suffixInput = drawer.querySelector('.plot-drawer-sp-suffix-input');
+                if (prefixInput) prefixInput.value = s.injectPrefix !== undefined ? s.injectPrefix : DEFAULT_INJECT_PREFIX;
+                if (suffixInput) suffixInput.value = s.injectSuffix !== undefined ? s.injectSuffix : DEFAULT_INJECT_SUFFIX;
+            }
+
+            const fillPresetSelect = (selClass, subModId, curValue) => {
+                const sel = drawer.querySelector('.' + selClass);
+                if (!sel) return;
+                const pMap = extension_settings.plot?.presets?.[subModId] || { default: { name: '默认预设' } };
+                sel.innerHTML = Object.entries(pMap)
+                    .map(([id, p]) => `<option value="${id}" ${id === curValue ? 'selected' : ''}>${escapeHtml(p.name || id)}</option>`)
+                    .join('');
+            };
+
+            const savedP = localConfig.presets || {};
+            fillPresetSelect('plot-drawer-sp-events-preset',  'storyplan_events',  savedP.storyplan_events || 'default');
+            fillPresetSelect('plot-drawer-sp-threads-preset', 'storyplan_threads', savedP.storyplan_threads || 'default');
+            fillPresetSelect('plot-drawer-sp-outline-preset', 'storyplan_outline', savedP.storyplan_outline || 'default');
         } else {
             drawer.querySelector('#plot-drawer-preset-group-single').style.display = 'block';
             drawer.querySelector('#plot-drawer-preset-group-split').style.display = 'none';
-            
+            drawer.querySelector('#plot-drawer-preset-group-storyplan').style.display = 'none';
+
+            const spInjectContainer = drawer.querySelector('.plot-drawer-sp-inject-custom');
+            if (spInjectContainer) spInjectContainer.style.display = 'none';
+
             const presets = extension_settings.plot?.presets?.[moduleId] || {};
             presetSelect.innerHTML = Object.entries(presets)
                 .map(([id, p]) => `<option value="${id}" ${id === (localConfig.presetId || 'default') ? 'selected' : ''}>${escapeHtml(p.name)}</option>`)
@@ -1096,7 +929,10 @@ export function createModuleConfigDrawer(moduleId, containerEl, onSave) {
         const connections = listConnections() || [];
         connSelect.innerHTML = `
             <option value="default">SillyTavern 默认连接</option>
-            ${connections.map(c => `<option value="${c.id}" ${c.id === (localConfig.connectionId || 'default') ? 'selected' : ''}>${escapeHtml(c.name)}</option>`).join('')}
+            ${connections.map(c => {
+                const label = c.name + (c.model ? ` (${c.model})` : '');
+                return `<option value="${c.id}" ${c.id === (localConfig.connectionId || 'default') ? 'selected' : ''}>${escapeHtml(label)}</option>`;
+            }).join('')}
         `;
         
         // Connection toggle
@@ -1139,410 +975,7 @@ export function createModuleConfigDrawer(moduleId, containerEl, onSave) {
         // Populate regex rules
         refreshRegexRulesList();
         
-        let localCustomBadges = { ...(getContext().extensionSettings.plot?.customBadges || {}) };
-        
-        const syncInputsToLocalBadges = () => {
-            const listContainer = drawer.querySelector('#plot-drawer-badges-rules-list');
-            if (!listContainer) return;
-            
-            const updatedBadges = {};
-            listContainer.querySelectorAll('.plot-badge-rule-row').forEach(row => {
-                const keyInput = row.querySelector('.badge-key');
-                let key = keyInput.value.trim().replace(/[^a-zA-Z0-9_]/g, '');
-                const label = row.querySelector('.badge-label').value.trim();
-                const color = row.querySelector('.badge-color').value.trim();
-                const bgColor = row.querySelector('.badge-bg-color').value.trim();
-                const borderColor = row.querySelector('.badge-border-color').value.trim();
-                
-                const tempId = keyInput.dataset.tempId || 'new_attr_' + Date.now();
-                const finalKey = key || tempId;
-                updatedBadges[finalKey] = { label, color, bgColor, borderColor };
-            });
-            localCustomBadges = updatedBadges;
-        };
 
-        const refreshBadgesRulesList = () => {
-            const listContainer = drawer.querySelector('#plot-drawer-badges-rules-list');
-            if (!listContainer) return;
-            listContainer.innerHTML = '';
-            
-            Object.entries(localCustomBadges).forEach(([key, val]) => {
-                const row = document.createElement('div');
-                row.className = 'plot-badge-rule-row';
-                row.style.cssText = 'display: flex; flex-direction: column; gap: 6px; padding: 6px 4px; border-bottom: 1px dashed var(--SmartThemeBorderColor); width: 100%; margin-bottom: 4px;';
-                
-                const displayKey = key.startsWith('new_attr_') ? '' : key;
-                const isCustom = val.color && !val.color.startsWith('var');
-                
-                row.innerHTML = `
-                    <!-- Row 1: Core key mapping -->
-                    <div style="display: flex; gap: 4px; align-items: center; width: 100%; box-sizing: border-box;">
-                        <input type="text" class="plot-input badge-key" placeholder="键名(如 exp)" value="${escapeHtml(displayKey)}" style="flex: 1; min-width: 0; box-sizing: border-box; font-size: 0.82em; padding: 2px 4px; height: 24px;" title="英文键名" data-temp-id="${escapeHtml(key)}">
-                        <input type="text" class="plot-input badge-label" placeholder="中文" value="${escapeHtml(val.label || '')}" style="flex: 1.2; min-width: 0; box-sizing: border-box; font-size: 0.82em; padding: 2px 4px; height: 24px;" title="中文标签名称">
-                        <select class="plot-select badge-palette-select" style="flex: 1.5; min-width: 0; box-sizing: border-box; font-size: 0.82em; padding: 0 4px; height: 24px;" title="选择色系预设">
-                            <option value="custom">-- 自定义配色 --</option>
-                            <optgroup label="酒馆自适应">
-                                <option value="st-accent" ${val.color === 'var(--SmartThemeEmColor)' ? 'selected' : ''}>酒馆强调</option>
-                                <option value="st-body" ${val.color === 'var(--SmartThemeBodyColor)' ? 'selected' : ''}>酒馆文本</option>
-                                <option value="st-underline" ${val.color === 'var(--SmartThemeUnderlineColor)' ? 'selected' : ''}>酒馆下划线</option>
-                                <option value="st-quote" ${val.color === 'var(--SmartThemeQuoteColor)' ? 'selected' : ''}>酒馆引用</option>
-                            </optgroup>
-                            <optgroup label="莫兰迪色系">
-                                <option value="morandi-pink" ${val.color === '#9c6d6d' ? 'selected' : ''}>莫兰迪粉</option>
-                                <option value="morandi-green" ${val.color === '#697c6c' ? 'selected' : ''}>莫兰迪绿</option>
-                                <option value="morandi-blue" ${val.color === '#5d7486' ? 'selected' : ''}>莫兰迪蓝</option>
-                                <option value="morandi-grey" ${val.color === '#72777b' ? 'selected' : ''}>莫兰迪灰</option>
-                            </optgroup>
-                            <optgroup label="马卡龙色系">
-                                <option value="macaron-pink" ${val.color === '#ff70a6' ? 'selected' : ''}>马卡龙粉</option>
-                                <option value="macaron-blue" ${val.color === '#5390d9' ? 'selected' : ''}>马卡龙蓝</option>
-                                <option value="macaron-purple" ${val.color === '#a370f7' ? 'selected' : ''}>马卡龙紫</option>
-                                <option value="macaron-orange" ${val.color === '#ff9f1c' ? 'selected' : ''}>马卡龙橙</option>
-                            </optgroup>
-                        </select>
-                        <i class="fa-solid fa-trash-can badge-delete" style="cursor: pointer; color: var(--SmartThemeQuoteColor); font-size: 0.85em; padding: 0 4px;" title="删除"></i>
-                    </div>
-                    
-                    <!-- Hidden fields to preserve CSS variables exactly -->
-                    <input type="hidden" class="badge-color" value="${escapeHtml(val.color || '')}">
-                    <input type="hidden" class="badge-bg-color" value="${escapeHtml(val.bgColor || '')}">
-                    <input type="hidden" class="badge-border-color" value="${escapeHtml(val.borderColor || '')}">
-                    
-                    <!-- Row 2: Advanced Color Value override pickers (only shown for custom/hex colors) -->
-                    <div class="plot-color-fine-tune-row" style="display: ${isCustom ? 'flex' : 'none'}; gap: 12px; align-items: center; width: 100%; box-sizing: border-box; font-size: 0.78em; opacity: 0.85; padding-left: 2px;">
-                        <span style="opacity: 0.6; flex-shrink: 0; font-size: 0.95em; margin-right: 2px;">自定义色彩:</span>
-                        
-                        <div style="display: flex; align-items: center; gap: 4px; flex: 1; min-width: 0;">
-                            <span style="opacity: 0.6;">字:</span>
-                            <input type="color" class="badge-color-picker" value="${val.color && val.color.startsWith('#') ? val.color : '#ffaa00'}" style="flex: 1; min-width: 0; height: 18px; border: none; padding: 0; background: none; cursor: pointer;" title="文字颜色">
-                        </div>
-                        
-                        <div style="display: flex; align-items: center; gap: 4px; flex: 1; min-width: 0;">
-                            <span style="opacity: 0.6;">背:</span>
-                            <input type="color" class="badge-bg-color-picker" value="${val.bgColor && val.bgColor.startsWith('#') ? val.bgColor : '#222222'}" style="flex: 1; min-width: 0; height: 18px; border: none; padding: 0; background: none; cursor: pointer;" title="背景颜色">
-                        </div>
-                        
-                        <div style="display: flex; align-items: center; gap: 4px; flex: 1; min-width: 0;">
-                            <span style="opacity: 0.6;">边:</span>
-                            <input type="color" class="badge-border-color-picker" value="${val.borderColor && val.borderColor.startsWith('#') ? val.borderColor : '#ffaa00'}" style="flex: 1; min-width: 0; height: 18px; border: none; padding: 0; background: none; cursor: pointer;" title="边框颜色">
-                        </div>
-                    </div>
-                `;
-                
-                const paletteSelect = row.querySelector('.badge-palette-select');
-                const colorInput = row.querySelector('.badge-color');
-                const bgInput = row.querySelector('.badge-bg-color');
-                const borderInput = row.querySelector('.badge-border-color');
-                
-                const colorPicker = row.querySelector('.badge-color-picker');
-                const bgPicker = row.querySelector('.badge-bg-color-picker');
-                const borderPicker = row.querySelector('.badge-border-color-picker');
-                const fineTuneRow = row.querySelector('.plot-color-fine-tune-row');
-                
-                // Sync pickers inputs to hidden text fields
-                colorPicker.addEventListener('input', () => { colorInput.value = colorPicker.value; });
-                bgPicker.addEventListener('input', () => { bgInput.value = bgPicker.value; });
-                borderPicker.addEventListener('input', () => { borderInput.value = borderPicker.value; });
-                
-                const presets = {
-                    'st-accent': { color: 'var(--SmartThemeEmColor)', bgColor: 'transparent', borderColor: 'var(--SmartThemeEmColor)' },
-                    'st-body': { color: 'var(--SmartThemeBodyColor)', bgColor: 'var(--SmartThemeChatTintColor)', borderColor: 'var(--SmartThemeBorderColor)' },
-                    'st-underline': { color: 'var(--SmartThemeUnderlineColor)', bgColor: 'transparent', borderColor: 'var(--SmartThemeUnderlineColor)' },
-                    'st-quote': { color: 'var(--SmartThemeQuoteColor)', bgColor: 'transparent', borderColor: 'var(--SmartThemeQuoteColor)' },
-                    
-                    'morandi-pink': { color: '#9c6d6d', bgColor: '#f4ebeb', borderColor: '#d6c1c1' },
-                    'morandi-green': { color: '#697c6c', bgColor: '#edf1ed', borderColor: '#c5cfc7' },
-                    'morandi-blue': { color: '#5d7486', bgColor: '#ebf1f5', borderColor: '#bfcdd6' },
-                    'morandi-grey': { color: '#72777b', bgColor: '#f0f2f3', borderColor: '#ced2d5' },
-                    
-                    'macaron-pink': { color: '#ff70a6', bgColor: '#ffe5ec', borderColor: '#ffc2d1' },
-                    'macaron-blue': { color: '#5390d9', bgColor: '#eaf2f8', borderColor: '#bbd4f1' },
-                    'macaron-purple': { color: '#a370f7', bgColor: '#f3e8ff', borderColor: '#e9d5ff' },
-                    'macaron-orange': { color: '#ff9f1c', bgColor: '#fff4e6', borderColor: '#ffe0b2' }
-                };
-                
-                paletteSelect.addEventListener('change', () => {
-                    const preset = presets[paletteSelect.value];
-                    if (preset) {
-                        colorInput.value = preset.color;
-                        bgInput.value = preset.bgColor;
-                        borderInput.value = preset.borderColor;
-                        fineTuneRow.style.display = 'none';
-                    } else if (paletteSelect.value === 'custom') {
-                        // Restore custom colors from pickers
-                        colorInput.value = colorPicker.value;
-                        bgInput.value = bgPicker.value;
-                        borderInput.value = borderPicker.value;
-                        fineTuneRow.style.display = 'flex';
-                    }
-                });
-                
-                row.querySelector('.badge-delete').addEventListener('click', () => {
-                    syncInputsToLocalBadges();
-                    delete localCustomBadges[key];
-                    refreshBadgesRulesList();
-                });
-                listContainer.appendChild(row);
-            });
-        };
-
-        const refreshRpgLayoutsList = (currentRpgConfig = null) => {
-            const listContainer = drawer.querySelector('#plot-drawer-rpg-layouts-list');
-            if (!listContainer) return;
-            listContainer.innerHTML = '';
-
-            const rpgFieldInput = drawer.querySelector('.plot-drawer-rpg-field-input');
-            const fieldKey = rpgFieldInput ? rpgFieldInput.value.trim() : 'category';
-            const goals = get('goals') || {};
-            const categories = new Set();
-            Object.values(goals).forEach(g => {
-                if (!g.deleted) {
-                    const val = g[fieldKey];
-                    if (val !== undefined && val !== null && String(val).trim() !== '') {
-                        categories.add(String(val).trim());
-                    }
-                }
-            });
-
-            const cats = Array.from(categories);
-            if (cats.length === 0) {
-                listContainer.innerHTML = `<div style="text-align:center; padding:10px; font-size:0.8em; opacity:0.6;">未检测到分类。请先在任务配置详情中，添加自定义分类属性字段并赋予值。</div>`;
-                return;
-            }
-
-            const CORE_KEYS = ['id', 'parentId', 'title', 'name', 'description', 'status', 'type', 'conditions', 'actions', 'injectLineTemplate', 'completedDetail', 'deleted', 'preRequisites', 'icon'];
-            
-            cats.forEach(cat => {
-                const catCfg = currentRpgConfig?.layouts?.[cat] || { layout: 'tree', showFields: [] };
-                
-                // Scan custom fields in goals belonging to this category
-                const attrKeys = new Set();
-                Object.values(goals).forEach(g => {
-                    if (!g.deleted && String(g[fieldKey] || '').trim() === cat) {
-                        Object.keys(g).forEach(k => {
-                            if (!CORE_KEYS.includes(k) && k !== fieldKey) {
-                                attrKeys.add(k);
-                            }
-                        });
-                    }
-                });
-
-                const row = document.createElement('div');
-                row.className = 'plot-rpg-layout-row';
-                row.dataset.category = cat;
-                row.style.cssText = 'display:flex; flex-direction:column; gap:4px; padding:6px 8px; background:rgba(255,255,255,0.03); border:1px solid var(--SmartThemeBorderColor); border-radius:4px; margin-bottom:4px; box-sizing:border-box; width:100%;';
-                
-                const attrsHtml = attrKeys.size > 0 
-                    ? Array.from(attrKeys).map(k => {
-                        const isChecked = catCfg.showFields?.includes(k);
-                        return `
-                            <label style="display:inline-flex; align-items:center; gap:3px; cursor:pointer; font-size:0.75em; background:rgba(0,0,0,0.15); padding:2px 5px; border-radius:3px; margin-right:4px; white-space:nowrap;">
-                                <input type="checkbox" class="rpg-attr-chk" data-attr="${k}" ${isChecked ? 'checked' : ''}> ${k}
-                            </label>
-                        `;
-                      }).join('')
-                    : `<span style="font-size:0.72em; opacity:0.5;">(无自定义属性字段，可在任务编辑中添加)</span>`;
-
-                row.innerHTML = `
-                    <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:4px;">
-                        <span style="font-weight:bold; font-size:0.85em; color:var(--SmartThemeEmColor);">${escapeHtml(cat)}</span>
-                        <div style="display:flex; align-items:center; gap:6px;">
-                            <span style="font-size:0.75em; opacity:0.7;">布局方式:</span>
-                            <select class="rpg-layout-select plot-select" style="padding:1px 4px; font-size:0.8em; height:22px; width:90px; min-width:90px !important;">
-                                <option value="tree" ${catCfg.layout === 'tree' ? 'selected' : ''}>树形层级</option>
-                                <option value="grid" ${catCfg.layout === 'grid' ? 'selected' : ''}>徽章网格</option>
-                                <option value="stats" ${catCfg.layout === 'stats' ? 'selected' : ''}>属性表格</option>
-                                <option value="list" ${catCfg.layout === 'list' ? 'selected' : ''}>扁平列表</option>
-                            </select>
-                        </div>
-                    </div>
-                    <div style="display:flex; flex-wrap:wrap; align-items:center; gap:2px; margin-top:2px; border-top:1px dashed rgba(255,255,255,0.05); padding-top:4px;">
-                        <span style="font-size:0.72em; opacity:0.7; margin-right:4px;">显示属性:</span>
-                        <div style="display:flex; flex-wrap:wrap; gap:2px; align-items:center;">${attrsHtml}</div>
-                    </div>
-                `;
-                listContainer.appendChild(row);
-            });
-        };
-
-        const scanBtn = drawer.querySelector('#plot-drawer-scan-badges-btn');
-        if (scanBtn) {
-            const newScanBtn = scanBtn.cloneNode(true);
-            scanBtn.parentNode.replaceChild(newScanBtn, scanBtn);
-            newScanBtn.addEventListener('click', (e) => {
-                e.preventDefault();
-                syncInputsToLocalBadges();
-                
-                const goals = get('goals') || {};
-                const CORE_KEYS = ['id', 'parentId', 'title', 'name', 'description', 'status', 'type', 'conditions', 'actions', 'injectLineTemplate', 'completedDetail', 'preRequisites', 'icon'];
-                const detectedKeys = new Set();
-                
-                Object.values(goals).forEach(goal => {
-                    Object.keys(goal).forEach(k => {
-                        if (!CORE_KEYS.includes(k) && !localCustomBadges[k]) {
-                            detectedKeys.add(k);
-                        }
-                    });
-                });
-                
-                if (detectedKeys.size === 0) {
-                    alert('未在当前任务数据中检测到未映射的新自定义属性字段。');
-                    return;
-                }
-                
-                const labelMap = { reward: '奖励', rewards: '奖励', awards: '奖励', innerVoice: '心声', exp: '经验', clue: '线索' };
-                
-                detectedKeys.forEach(key => {
-                    localCustomBadges[key] = {
-                        label: labelMap[key] || key,
-                        color: 'var(--SmartThemeEmColor)',
-                        bgColor: 'transparent',
-                        borderColor: 'var(--SmartThemeEmColor)'
-                    };
-                });
-                
-                refreshBadgesRulesList();
-                alert(`已成功自动导入并配置 ${detectedKeys.size} 个新属性字段：${Array.from(detectedKeys).join(', ')}`);
-            });
-        }
-
-        const addBadgeRuleBtn = drawer.querySelector('#plot-drawer-add-badge-rule-btn');
-        if (addBadgeRuleBtn) {
-            const newAddBtn = addBadgeRuleBtn.cloneNode(true);
-            addBadgeRuleBtn.parentNode.replaceChild(newAddBtn, addBadgeRuleBtn);
-            newAddBtn.addEventListener('click', (e) => {
-                e.preventDefault();
-                syncInputsToLocalBadges();
-                const tempKey = 'new_attr_' + Date.now();
-                localCustomBadges[tempKey] = { 
-                    label: '', 
-                    color: 'var(--SmartThemeEmColor)', 
-                    bgColor: 'transparent', 
-                    borderColor: 'var(--SmartThemeEmColor)' 
-                };
-                refreshBadgesRulesList();
-                
-                setTimeout(() => {
-                    const rows = listContainer.querySelectorAll('.plot-badge-rule-row');
-                    const lastRow = rows[rows.length - 1];
-                    if (lastRow) {
-                        const keyInput = lastRow.querySelector('.badge-key');
-                        if (keyInput) keyInput.focus();
-                    }
-                }, 50);
-            });
-        }
-
-        if (moduleId === 'goals') {
-            drawer.querySelector('#plot-goals-display-settings').style.display = 'block';
-            drawer.querySelector('#plot-goals-badges-settings').style.display = 'block';
-            drawer.querySelector('#plot-goals-rpg-settings').style.display = 'block';
-            drawer.querySelector('#plot-goals-injection-settings').style.display = 'block';
-            drawer.querySelector('#plot-variables-injection-settings').style.display = 'none';
-            
-            const display = localConfig.display || { showDesc: false, showStatus: true, showType: false };
-            drawer.querySelector('.plot-drawer-display-desc-chk').checked = !!display.showDesc;
-            drawer.querySelector('.plot-drawer-display-status-chk').checked = !!display.showStatus;
-            drawer.querySelector('.plot-drawer-display-type-chk').checked = !!display.showType;
-            
-            refreshBadgesRulesList();
-            
-            // Load RPG panel settings
-            const rpgConfig = localConfig.rpgConfig || { enabled: false, categoryField: 'category', layouts: {} };
-            const rpgEnabledChk = drawer.querySelector('.plot-drawer-rpg-enabled-chk');
-            const rpgFieldInput = drawer.querySelector('.plot-drawer-rpg-field-input');
-            const rpgContainer = drawer.querySelector('.plot-rpg-config-container');
-            
-            if (rpgEnabledChk && rpgFieldInput && rpgContainer) {
-                rpgEnabledChk.checked = !!rpgConfig.enabled;
-                rpgFieldInput.value = rpgConfig.categoryField || 'category';
-                rpgContainer.style.display = rpgConfig.enabled ? 'flex' : 'none';
-                
-                rpgEnabledChk.onchange = () => {
-                    rpgContainer.style.display = rpgEnabledChk.checked ? 'flex' : 'none';
-                };
-                
-                const scanRpgBtn = drawer.querySelector('#plot-drawer-scan-rpg-btn');
-                if (scanRpgBtn) {
-                    scanRpgBtn.onclick = (e) => {
-                        e.preventDefault();
-                        refreshRpgLayoutsList(rpgConfig);
-                    };
-                }
-                
-                refreshRpgLayoutsList(rpgConfig);
-            }
-            
-            // Load injection settings
-            const goalInject = getContext().extensionSettings.plot?.goalInjection || {
-                enabled: false,
-                template: "当前任务:\n{{plot_goals_active}}",
-                lineTemplate: "【{{title}}】{{desc}}"
-            };
-            const injectEnabledChk = drawer.querySelector('.plot-drawer-inject-enabled-chk');
-            if (injectEnabledChk) {
-                injectEnabledChk.checked = !!goalInject.enabled;
-            }
-            const injectTpl = drawer.querySelector('.plot-drawer-inject-template');
-            if (injectTpl) {
-                injectTpl.value = goalInject.template || '';
-            }
-            const injectLineTpl = drawer.querySelector('.plot-drawer-inject-line-template');
-            if (injectLineTpl) {
-                injectLineTpl.value = goalInject.lineTemplate || '';
-            }
-            const injectContainer = drawer.querySelector('.plot-goals-inject-container');
-            if (injectContainer) {
-                injectContainer.style.display = goalInject.enabled ? 'flex' : 'none';
-            }
-        } else if (moduleId === 'variables') {
-            const displayGrp = drawer.querySelector('#plot-goals-display-settings');
-            if (displayGrp) displayGrp.style.display = 'none';
-            const badgesGrp = drawer.querySelector('#plot-goals-badges-settings');
-            if (badgesGrp) badgesGrp.style.display = 'none';
-            const rpgGrp = drawer.querySelector('#plot-goals-rpg-settings');
-            if (rpgGrp) rpgGrp.style.display = 'none';
-            drawer.querySelector('#plot-goals-injection-settings').style.display = 'none';
-            drawer.querySelector('#plot-variables-injection-settings').style.display = 'block';
-
-            // Load variables injection settings
-            const varInject = getContext().extensionSettings.plot?.variablesInjection || {
-                enabled: true,
-                injectAll: false,
-                template: "当前状态:\n{{plot_variables_visible}}",
-                lineTemplate: "- {{name}}: {{value}}"
-            };
-            const varInjectEnabledChk = drawer.querySelector('.plot-drawer-var-inject-enabled-chk');
-            if (varInjectEnabledChk) {
-                varInjectEnabledChk.checked = !!varInject.enabled;
-            }
-            const varInjectAllChk = drawer.querySelector('.plot-drawer-var-inject-all-chk');
-            if (varInjectAllChk) {
-                varInjectAllChk.checked = !!varInject.injectAll;
-            }
-            const varInjectTpl = drawer.querySelector('.plot-drawer-var-inject-template');
-            if (varInjectTpl) {
-                varInjectTpl.value = varInject.template || '';
-            }
-            const varInjectLineTpl = drawer.querySelector('.plot-drawer-var-inject-line-template');
-            if (varInjectLineTpl) {
-                varInjectLineTpl.value = varInject.lineTemplate || '';
-            }
-            const varInjectContainer = drawer.querySelector('.plot-variables-inject-container');
-            if (varInjectContainer) {
-                varInjectContainer.style.display = varInject.enabled ? 'flex' : 'none';
-            }
-        } else {
-            const displayGrp = drawer.querySelector('#plot-goals-display-settings');
-            if (displayGrp) displayGrp.style.display = 'none';
-            const badgesGrp = drawer.querySelector('#plot-goals-badges-settings');
-            if (badgesGrp) badgesGrp.style.display = 'none';
-            const rpgGrp2 = drawer.querySelector('#plot-goals-rpg-settings');
-            if (rpgGrp2) rpgGrp2.style.display = 'none';
-            drawer.querySelector('#plot-goals-injection-settings').style.display = 'none';
-            drawer.querySelector('#plot-variables-injection-settings').style.display = 'none';
-        }
-        
         // Subscribe to WI updates
         if (_drawerWiUnsubscribe) {
             _drawerWiUnsubscribe();

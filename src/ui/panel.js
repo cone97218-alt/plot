@@ -1,27 +1,23 @@
 import { injectThemeRgbVariables } from '../utils/theme.js';
 import { renderExtensionTemplateAsync } from '../../../../../extensions.js';
 import { renderSettingsTab }  from './tab-settings.js';
-import { renderVariablesTab } from './tab-variables.js';
-import { renderGoalsTab }     from './tab-goals.js';
-import { renderStorylineTab } from './tab-storyline.js';
 import { renderBackstageTab } from './tab-backstage.js';
 import { renderPromptsTab }   from './tab-prompts.js';
 import { renderLogsTab }      from './tab-logs.js';
+import { renderStoryPlanTab } from './tab-storyplan.js';
 
 let overlayElement = null;
-let activeTabId = localStorage.getItem('plot_active_tab_id') || 'variables';
+let activeTabId = localStorage.getItem('plot_active_tab_id') || 'backstage';
 let _lastThemeHash = null; // P2: track theme state to avoid redundant DOM work
 
 // ── Tab Definitions ──────────────────────────────────────────────────────────
 
 const TABS = [
-    { id: 'variables', icon: 'fa-sliders',        label: '',  render: renderVariablesTab },
-    { id: 'goals',     icon: 'fa-bullseye',       label: '',  render: renderGoalsTab     },
-    { id: 'storyline', icon: 'fa-map',            label: '',  render: renderStorylineTab },
-    { id: 'backstage', icon: 'fa-masks-theater',  label: '',  render: renderBackstageTab },
-    { id: 'prompts',   icon: 'fa-pen-to-square',  label: '',  render: renderPromptsTab   },
-    { id: 'logs',      icon: 'fa-receipt',        label: '',  render: renderLogsTab      },
-    { id: 'settings',  icon: 'fa-gear',           label: '',  render: renderSettingsTab  },
+    { id: 'backstage',  icon: 'fa-masks-theater',  label: '',  render: renderBackstageTab  },
+    { id: 'storyplan',  icon: 'fa-map',            label: '',  render: renderStoryPlanTab  },
+    { id: 'prompts',    icon: 'fa-pen-to-square',  label: '',  render: renderPromptsTab    },
+    { id: 'logs',       icon: 'fa-receipt',        label: '',  render: renderLogsTab       },
+    { id: 'settings',   icon: 'fa-gear',           label: '',  render: renderSettingsTab   },
 ];
 
 // ── Build Popup DOM ──────────────────────────────────────────────────────────
@@ -165,8 +161,9 @@ export function refreshTabVisibility() {
         const tabBtn = document.querySelector(`#plot-tab-bar .plot-tab[data-tab="${tab.id}"]`);
         if (!tabBtn) return;
 
-        const isModule = ['variables', 'goals', 'storyline', 'backstage', 'logs'].includes(tab.id);
+        const isModule = ['backstage', 'logs'].includes(tab.id);
         const isEnabled = !isModule || modules[tab.id] !== false;
+        // storyplan is always visible regardless of module settings
 
         if (isEnabled) {
             tabBtn.style.display = 'block';
@@ -178,6 +175,7 @@ export function refreshTabVisibility() {
         }
     });
 }
+
 
 export function hidePanel() {
     if (!overlayElement) return;

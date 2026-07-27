@@ -3,7 +3,6 @@ import { injectThemeRgbVariables } from './src/utils/theme.js';
 import { showPanel } from './src/ui/panel.js';
 import { registerHooks } from './src/core/hooks.js';
 import { loadPlotData } from './src/core/storage.js';
-import { registerMacros } from './src/utils/macro.js';
 
 const MODULE_NAME = 'plot';
 const QR_BTN_ID = 'plot-qr-btn';
@@ -16,7 +15,7 @@ const { eventSource, eventTypes: event_types } = ctx;
 if (!ctx.extensionSettings[MODULE_NAME]) {
     ctx.extensionSettings[MODULE_NAME] = {
         enabled: true,
-        version: "0.1.0"
+        version: "0.5.0"
     };
 }
 
@@ -97,7 +96,7 @@ function debounce(fn, ms) {
     };
 }
 
-// 5. Hook initialization
+// 6. Hook initialization
 export async function init() {
     // Inject Theme RGB variables on start
     injectThemeRgbVariables();
@@ -108,9 +107,6 @@ export async function init() {
     // Register event hooks and load initial data
     registerHooks(eventSource, event_types);
     await loadPlotData();
-
-    // Register plot macros ({{plot_state}} etc.)
-    registerMacros();
 
     // Set up MutationObserver to re-inject if elements are cleared by ST re-renders
     // Debounced to 150ms to avoid flooding on rapid DOM mutations
@@ -135,3 +131,4 @@ export async function init() {
         injectMenuButton();
     });
 }
+
